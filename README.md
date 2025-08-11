@@ -19,14 +19,17 @@ This is based on previous work by Stephen Ostrowski.
   * How much each transcript/isoform is expressed in TPM units
 - OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded
   * How much each transcript/isoform is expressed in TPM units
+- AvanaGuide
+  * Maps guide RNA's (Crispr) to genes and their locations 
 
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
 - I've filtered the protein data to just MITF expression
 - I've generated correlation values for MITF expression <-> transcript expression
+- I've generated correlations between cell-line genes <-> MITF expression
 
 ## Next Steps
-- Generate correlations between cell-line genes <-> MITF expression
-- Identify discordant transcripts (where transcript<->MITF much stronger than gene<->MITF)
-- Plot values
+- Figure out how to mapy transcripts <-> parent genes
+- Identify discordant transcripts (where transcript<->MITF correlation much stronger than gene<->MITF)
+- Use the `AvanaGuide.csv` data to map to CRISPR guides and positios to target
