@@ -8,7 +8,7 @@ However, due to alternative splicing and other processes, resulting RNA transcri
 
 Therefore, in this type of analysis we will try to find transcripts that are correlated with MITF, but come from genes that don't correlate with MITF.
 
-This is based on previous work.
+This is based on previous work by Stephen Ostrowski.
 
 
 ## Data Sources:
