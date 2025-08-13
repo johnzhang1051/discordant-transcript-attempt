@@ -87,8 +87,11 @@ MIFT_gene_correlations <- map_dfr(transcript_names, function(transcript) {
         "(", round(current_pos/total_transcripts*100, 1), "%)\n")
   }
   
+  # tibble creates a small DF with the results (in this case the columns are: term, pearson_corr, spearman_corr)
   tibble(
     term = transcript,
+    # Run correlations between MITF<->a transcript
+    # complete.obs: removes pairs where any data is missing
     pearson_corr = cor(protein_gene_expression_data$MITF, protein_gene_expression_data[[transcript]], 
                        method = "pearson", use = "complete.obs"),
     spearman_corr = cor(protein_gene_expression_data$MITF, protein_gene_expression_data[[transcript]], 
@@ -99,35 +102,37 @@ MIFT_gene_correlations <- map_dfr(transcript_names, function(transcript) {
 # export correlations because they take forever to run
 write.csv(MIFT_gene_correlations,"MIFT_gene_correlations.csv", row.names = FALSE)
 
-#######################  Map transcripts to parent genes
-transcript_gene_map <- transcript_correlations %>%
-  mutate(
-    parent_gene = str_extract(term, "^[A-Z0-9]+"),  # Extract gene symbol
-    transcript_corr = MITF
-  ) %>%
-  left_join(gene_correlations, by = c("parent_gene" = "term")) %>%
-  rename(gene_corr = MITF.y) %>%
-  select(-MITF.x)
+
+
+#######################  Map transcripts to parent genes (not sure how to do this yet)
+# transcript_gene_map <- transcript_correlations %>%
+#   mutate(
+#     parent_gene = str_extract(term, "^[A-Z0-9]+"),  # Extract gene symbol
+#     transcript_corr = MITF
+#   ) %>%
+#   left_join(gene_correlations, by = c("parent_gene" = "term")) %>%
+#   rename(gene_corr = MITF.y) %>%
+#   select(-MITF.x)
 
 #######################  Find discordant transcripts 
 # (transcript correlates >20% better than gene)
-discordant_transcripts <- transcript_gene_map %>%
-  filter(
-    abs(transcript_corr) > 0.5,  # Strong transcript correlation
-    abs(transcript_corr) / abs(gene_corr) > 1.2  # 20% better than gene
-  ) %>%
-  arrange(desc(abs(transcript_corr)))
-
-print(discordant_transcripts)
+# discordant_transcripts <- transcript_gene_map %>%
+#   filter(
+#     abs(transcript_corr) > 0.5,  # Strong transcript correlation
+#     abs(transcript_corr) / abs(gene_corr) > 1.2  # 20% better than gene
+#   ) %>%
+#   arrange(desc(abs(transcript_corr)))
+# 
+# print(discordant_transcripts)
 
 ####################### Create scatter plot
-ggplot(transcript_gene_map, aes(x = gene_corr, y = transcript_corr)) +
-  geom_point(alpha = 0.6, color = "lightblue") +
-  geom_point(data = discordant_transcripts, color = "red", size = 2) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-  labs(
-    title = "Transcript vs Gene Correlation with MITF",
-    x = "Parent Gene Correlation with MITF", 
-    y = "Transcript Correlation with MITF"
-  ) +
-  theme_minimal()
+# ggplot(transcript_gene_map, aes(x = gene_corr, y = transcript_corr)) +
+#   geom_point(alpha = 0.6, color = "lightblue") +
+#   geom_point(data = discordant_transcripts, color = "red", size = 2) +
+#   geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+#   labs(
+#     title = "Transcript vs Gene Correlation with MITF",
+#     x = "Parent Gene Correlation with MITF", 
+#     y = "Transcript Correlation with MITF"
+#   ) +
+#   theme_minimal()
