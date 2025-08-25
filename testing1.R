@@ -50,7 +50,7 @@ transcript_names <- colnames(combined_data)[!colnames(combined_data) %in% c("mod
 
 total_transcripts <- length(transcript_names)
 
-MIFT_transcript_correlations <- map_dfr(transcript_names, function(transcript) {
+MITF_transcript_correlations <- map_dfr(transcript_names, function(transcript) {
   # Get current position
   current_pos <- which(transcript_names == transcript)
   
@@ -70,14 +70,14 @@ MIFT_transcript_correlations <- map_dfr(transcript_names, function(transcript) {
 })
 
 # export correlations because they take forever to run
-write.csv(MIFT_transcript_correlations,"MIFT_transcript_correlations.csv", row.names = FALSE)
+write.csv(MITF_transcript_correlations,"MITF_transcript_correlations.csv", row.names = FALSE)
 
 ####################### Correlation analysis for gene-level expression
 transcript_names <- colnames(protein_gene_expression_data)[!colnames(protein_gene_expression_data) %in% c("model_id")]
 
 total_transcripts <- length(transcript_names)
 
-MIFT_gene_correlations <- map_dfr(transcript_names, function(transcript) {
+MITF_gene_correlations <- map_dfr(transcript_names, function(transcript) {
   # Get current position
   current_pos <- which(transcript_names == transcript)
   
@@ -100,19 +100,106 @@ MIFT_gene_correlations <- map_dfr(transcript_names, function(transcript) {
 })
 
 # export correlations because they take forever to run
-write.csv(MIFT_gene_correlations,"MIFT_gene_correlations.csv", row.names = FALSE)
+write.csv(MITF_gene_correlations,"MITF_gene_correlations.csv", row.names = FALSE)
 
 
+#######################  Pull in correlations data (if working on it)
+MITF_transcript_correlations <- readr::read_csv(
+  file="MITF_transcript_correlations.csv"
+)
+
+colnames(MITF_transcript_correlations)[1] <- "transcript_id"
+
+MITF_gene_correlations <- readr::read_csv(
+  file="MITF_gene_correlations.csv"
+)
+colnames(MITF_gene_correlations)[1] <- "gene_id"
+
+filtered_transcripts <- MITF_transcript_correlations %>%
+  filter(pearson_corr > 0.5 | spearman_corr > 0.5)
 
 #######################  Map transcripts to parent genes (not sure how to do this yet)
-# transcript_gene_map <- transcript_correlations %>%
-#   mutate(
-#     parent_gene = str_extract(term, "^[A-Z0-9]+"),  # Extract gene symbol
-#     transcript_corr = MITF
-#   ) %>%
-#   left_join(gene_correlations, by = c("parent_gene" = "term")) %>%
-#   rename(gene_corr = MITF.y) %>%
-#   select(-MITF.x)
+
+# using ensembl Rest API
+# documentation: https://rest.ensembl.org/documentation/info/lookup
+
+library(httr)
+library(jsonlite)
+library(xml2)
+library(progress)
+
+server <- "https://rest.ensembl.org"
+all_ensembl_data <- data.frame()
+failed_ids <- data.frame(transcript_id = character(), error = character(), stringsAsFactors = FALSE)
+
+# Create progress bar
+pb <- progress_bar$new(
+  format = "  Processing [:bar] :percent in :elapsed, ETA: :eta",
+  total = nrow(filtered_transcripts),
+  clear = FALSE,
+  width = 60
+)
+
+loop_runs <- 0
+
+for (x in filtered_transcripts$transcript_id) {
+  loop_runs <- loop_runs + 1
+  stable_transcript_id <- sub("\\..*", "", sub("^[.]*", "", x))
+  ext <- paste("/lookup/id/", stable_transcript_id, "?expand=0", sep="")
+  
+  tryCatch({
+    r <- GET(paste(server, ext, sep = ""), content_type("application/json"))
+    
+    # Check specific status codes
+    if (status_code(r) == 400) {
+      failed_ids <- rbind(failed_ids, data.frame(
+        transcript_id = stable_transcript_id, 
+        error = "Bad Request (400)", 
+        stringsAsFactors = FALSE
+      ))
+      pb$tick()
+      next
+    }
+    
+    if (status_code(r) == 404) {
+      failed_ids <- rbind(failed_ids, data.frame(
+        transcript_id = stable_transcript_id, 
+        error = "Not Found (404)", 
+        stringsAsFactors = FALSE
+      ))
+      pb$tick()
+      next
+    }
+    
+    # Will throw error if other HTTP error codes
+    stop_for_status(r)
+    
+    ensembl_response_df <- data.frame(t(sapply(content(r), c)))
+    
+    # Add transcript_id for reference
+    ensembl_response_df$transcript_id <- stable_transcript_id
+    
+    # Append to the main dataframe
+    if (nrow(all_ensembl_data) == 0) {
+      all_ensembl_data <- ensembl_response_df
+    } else {
+      # Use rbind.fill to handle column mismatches if needed
+      all_ensembl_data <- rbind(all_ensembl_data, ensembl_response_df)
+    }
+    
+  }, error = function(e) {
+    # Catch any other errors (network issues, JSON parsing errors, etc.)
+    failed_ids <<- rbind(failed_ids, data.frame(
+      transcript_id = stable_transcript_id, 
+      error = as.character(e$message), 
+      stringsAsFactors = FALSE
+    ))
+  })
+  
+  pb$tick()
+}
+
+all_ensembl_data <- unique(all_ensembl_data)
 
 #######################  Find discordant transcripts 
 # (transcript correlates >20% better than gene)
