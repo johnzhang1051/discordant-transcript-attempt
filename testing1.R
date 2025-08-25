@@ -145,7 +145,7 @@ loop_runs <- 0
 for (x in filtered_transcripts$transcript_id) {
   loop_runs <- loop_runs + 1
   stable_transcript_id <- sub("\\..*", "", sub("^[.]*", "", x))
-  ext <- paste("/lookup/id/", stable_transcript_id, "?expand=0", sep="")
+  ext <- paste("/lookup/id/", stable_transcript_id, "?expand=1", sep="")
   
   tryCatch({
     r <- GET(paste(server, ext, sep = ""), content_type("application/json"))
@@ -201,25 +201,9 @@ for (x in filtered_transcripts$transcript_id) {
 
 all_ensembl_data <- unique(all_ensembl_data)
 
-#######################  Find discordant transcripts 
-# (transcript correlates >20% better than gene)
-# discordant_transcripts <- transcript_gene_map %>%
-#   filter(
-#     abs(transcript_corr) > 0.5,  # Strong transcript correlation
-#     abs(transcript_corr) / abs(gene_corr) > 1.2  # 20% better than gene
-#   ) %>%
-#   arrange(desc(abs(transcript_corr)))
-# 
-# print(discordant_transcripts)
 
-####################### Create scatter plot
-# ggplot(transcript_gene_map, aes(x = gene_corr, y = transcript_corr)) +
-#   geom_point(alpha = 0.6, color = "lightblue") +
-#   geom_point(data = discordant_transcripts, color = "red", size = 2) +
-#   geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-#   labs(
-#     title = "Transcript vs Gene Correlation with MITF",
-#     x = "Parent Gene Correlation with MITF", 
-#     y = "Transcript Correlation with MITF"
-#   ) +
-#   theme_minimal()
+#######################  Get exon-level dataframe
+exon_locations <- all_ensembl_data %>%
+  select(transcript_id, Exon) %>%
+  unnest_longer(Exon) %>%      # First unnest the list
+  unnest_wider(Exon)           # Then spread the columns
