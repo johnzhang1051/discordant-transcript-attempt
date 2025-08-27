@@ -35,7 +35,8 @@ This is based on previous work by Stephen Ostrowski.
 - I created 2 R files:
   * `analysis_v1.R`: this is the old version that uses Ensembl's REST API to retrieve exon data (limited to 54k pulls, which is not enough)
   * `analysis_v2.R`: this is the newest version of my code that uses Ensembl's Biomart R package to pull all exon data instead (much more effective for the large amounts of data we need)
+- I've used `GenomicRanges` library to find overlaps between `AvanaGuide` guide coordinates and the **transcript** coordinates, so we know which transcripts were targeted by the guides
 
 ## Next Steps
-- Figure out how to map Guides to Transcripts by using the exon locations from the previous step, likely using `AvanaGuide.csv` to map to CRISPR guides and positios to target
 - Analyze whether the guide targeting a transcript is correlated to the guide also affects the cancer cell
+  * For this, I need to go through Depmap data to find Guide Effect data

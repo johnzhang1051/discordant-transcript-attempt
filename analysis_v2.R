@@ -12,6 +12,7 @@ library(tidyverse)
 library(dplyr)
 library(corrr)
 library(ggplot2)
+library(tidyr)
 setwd("/Users/johnz/Documents/GitFiles/discordant-transcript-attempt")
 
 ####################### Getting data
@@ -200,23 +201,98 @@ write.csv(results$snp_somatic,"biomart_snp_somatic.csv", row.names = FALSE)
 write.csv(results$structure,"biomart_structure.csv", row.names = FALSE)
 
 #######################  Get exon-level dataframe
-exon_locations <- results$structure
+exon_locations <- readr::read_csv(
+  file="biomart_structure.csv"
+)
+#exon_locations <- results$structure
 
 #######################  Map Depmap Guides to Transcripts
 
-# Use Avana data check if sgRNAs match Genes 
+# Use Avana data check if sgRNAs overlap with Exon coordinates 
 avana_guide_map <- readr::read_csv(
   file=file.path("depmap-data", file="AvanaGuideMap.csv")
 )
 
-gene <- readr::read_csv(
-  file=file.path("depmap-data", file="gene.csv")
+# filter to coordinates without "NT", and only have "chr..."
+avana_guide_map <- avana_guide_map %>%
+  filter(grepl("^chr[0-9XY]", GenomeAlignment))
+
+# extract sgRNA targeted coordinate and strand
+avana_guide_map <- avana_guide_map %>%
+  separate(GenomeAlignment, 
+           into = c("chromosome", "guide_coordinate", "guide_strand"), 
+           sep = "_",
+           remove = FALSE) %>%
+  mutate(
+    chromosome = gsub("chr", "", chromosome),
+    guide_coordinate = as.integer(guide_coordinate),
+    guide_strand = case_when(
+      guide_strand == "+" ~ 1,
+      guide_strand == "-" ~ -1,
+      TRUE ~ NA_real_
+    )
+  )
+
+
+# Use GenomicRanges library to find overlaps between exon and guide coordinates for same chromosomes
+library(GenomicRanges)
+
+# Fix exon data by removing conflicting columns and converting strand
+exon_locations <- exon_locations %>%
+  mutate(strand_char = case_when(
+    strand == 1 ~ "+",
+    strand == -1 ~ "-",
+    TRUE ~ "*"
+  )) %>%
+  select(-strand)  # Remove conflicting column names
+
+exon_gr <- makeGRangesFromDataFrame(
+  exon_locations,
+  seqnames.field = "chromosome_name",
+  start.field = "exon_chrom_start", 
+  end.field = "exon_chrom_end",
+  strand.field = "strand_char",
+  keep.extra.columns = TRUE
 )
 
-# join in gene ID's
-joined_genes <- left_join(all_ensembl_data, gene, by = c("Parent" = "ensembl_gene_id"))
+# Fix guide data similarly
+avana_guide_map <- avana_guide_map %>%
+  mutate(strand_char = case_when(
+    guide_strand == 1 ~ "+",
+    guide_strand == -1 ~ "-", 
+    TRUE ~ "*"
+  )) %>%
+  select(-guide_strand)  # Remove original strand column, because GenomicRange dhas it's own columns it needs
 
-avana_guide_map$gene_symbol_cleaned <- sub("\\s*\\(.*\\)", "", sub("\\..*", "", sub("^[.]*", "", avana_guide_map$Gene)))
+guide_gr <- makeGRangesFromDataFrame(
+  avana_guide_map,
+  seqnames.field = "chromosome",
+  start.field = "guide_coordinate",
+  end.field = "guide_coordinate",
+  strand.field = "strand_char",
+  keep.extra.columns = TRUE
+)
+
+# Find overlaps
+overlap_hits <- findOverlaps(guide_gr, exon_gr)
+
+# Extract overlapping data
+overlaps <- data.frame(
+  guide_data = avana_guide_map[queryHits(overlap_hits), ],
+  exon_data = exon_locations[subjectHits(overlap_hits), ]
+)
 
 
-final_df <- inner_join(joined_genes, avana_guide_map, by = c("symbol" = "gene_symbol_cleaned"))
+# export overlaps data because it takes a while to run
+write.csv(overlaps,"exon_guide_overlaps.csv", row.names = FALSE)
+
+#######################  Get overlap data (START HERE JOHN)
+overlaps <- readr::read_csv(
+  file="exon_guide_overlaps.csv"
+)
+
+#######################  Correlate Guide Effect to Transcripts
+
+# Pull in guide effect data from Depmap
+
+
