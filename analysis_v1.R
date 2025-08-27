@@ -201,9 +201,35 @@ for (x in filtered_transcripts$transcript_id) {
 
 all_ensembl_data <- unique(all_ensembl_data)
 
+all_ensembl_data$Parent <- as.character(all_ensembl_data$Parent)
+
+
 
 #######################  Get exon-level dataframe
 exon_locations <- all_ensembl_data %>%
   select(transcript_id, Exon) %>%
   unnest_longer(Exon) %>%      # First unnest the list
   unnest_wider(Exon)           # Then spread the columns
+
+exon_locations <- exon_locations %>% rename(exon_start = start, exon_end = end, exon_id = id)
+
+#######################  Map Depmap Guides to Transcripts
+
+# Use Avana data check if sgRNAs match Genes 
+avana_guide_map <- readr::read_csv(
+  file=file.path("depmap-data", file="AvanaGuideMap.csv")
+)
+
+gene <- readr::read_csv(
+  file=file.path("depmap-data", file="gene.csv")
+)
+
+
+# join in gene ID's
+joined_genes <- left_join(all_ensembl_data, gene, by = c("Parent" = "ensembl_gene_id"))
+
+
+avana_guide_map$gene_symbol_cleaned <- sub("\\s*\\(.*\\)", "", sub("\\..*", "", sub("^[.]*", "", avana_guide_map$Gene)))
+
+
+final_df <- inner_join(joined_genes, avana_guide_map, by = c("symbol" = "gene_symbol_cleaned"))

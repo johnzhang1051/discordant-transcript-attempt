@@ -21,6 +21,9 @@ This is based on previous work by Stephen Ostrowski.
   * How much each transcript/isoform is expressed in TPM units
 - AvanaGuide
   * Maps guide RNA's (Crispr) to genes and their locations 
+[Ensembl](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
+- Biomart R Package
+  * Lets us search genetic attributes (eg `exon_start_position`, `transcript_id`) by filtering to specific values such as gene, transcript, or exon id's
 
 
 ## Progress/Notes
@@ -28,8 +31,11 @@ This is based on previous work by Stephen Ostrowski.
 - I've filtered the protein data to just MITF expression
 - I've generated correlation values for MITF expression <-> transcript expression
 - I've generated correlations between cell-line genes <-> MITF expression
+- I've used Ensembl Biomart R package to map transcripts <-> parent genes <-> exons, and extracted exon locations for each transcript (note this part of the script takes a while)
+- I created 2 R files:
+  * `analysis_v1.R`: this is the old version that uses Ensembl's REST API to retrieve exon data (limited to 54k pulls, which is not enough)
+  * `analysis_v2.R`: this is the newest version of my code that uses Ensembl's Biomart R package to pull all exon data instead (much more effective for the large amounts of data we need)
 
 ## Next Steps
-- Figure out how to mapy transcripts <-> parent genes
-- Identify discordant transcripts (where transcript<->MITF correlation much stronger than gene<->MITF)
-- Use the `AvanaGuide.csv` data to map to CRISPR guides and positios to target
+- Figure out how to map Guides to Transcripts by using the exon locations from the previous step, likely using `AvanaGuide.csv` to map to CRISPR guides and positios to target
+- Analyze whether the guide targeting a transcript is correlated to the guide also affects the cancer cell
