@@ -1,10 +1,3 @@
-####################### Installing depmap
-
-# if (!require("BiocManager", quietly = TRUE))
-#   install.packages("BiocManager")
-# 
-# BiocManager::install("depmap")
-
 ####################### Setting up environment
 
 library(depmap)
@@ -16,18 +9,13 @@ library(tidyr)
 setwd("/Users/johnz/Documents/GitFiles/discordant-transcript-attempt")
 
 ####################### Getting data
-
-# 1. Get cell line info - need this to identify melanoma cells (actually don't need this)
-cell_info <- depmap_metadata()
-melanoma_cells <- filter(cell_info, grepl("Melanoma", subtype_disease, ignore.case = TRUE))
-
-# 2. Get transcript/isoform expression data - so we know which transcripts are expressed
+# Get transcript/isoform expression data - so we know which transcripts are expressed
 transcript_expression_data <- readr::read_csv(
   file=file.path("depmap-data", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv")
 )
 colnames(transcript_expression_data)[1] <- "index"
 
-# 3. Get protein 
+# Get protein 
 protein_gene_expression_data <- readr::read_csv(
   file=file.path("depmap-data", "OmicsExpressionProteinCodingGenesTPMLogp1.csv")
 )
@@ -288,11 +276,66 @@ write.csv(overlaps,"exon_guide_overlaps.csv", row.names = FALSE)
 
 #######################  Get overlap data (START HERE JOHN)
 overlaps <- readr::read_csv(
-  file="exon_guide_overlaps.csv"
+  file="exon_guide_overlaps.csv",
+  index = FALSE
 )
+
+
 
 #######################  Correlate Guide Effect to Transcripts
 
 # Pull in guide effect data from Depmap
+avana_raw_readcounts <- readr::read_csv(
+  file=file.path("depmap-data", file="AvanaRawReadcounts.csv")
+)
+colnames(avana_raw_readcounts)[1] <- "sg_rna"
+
+screen_sequence_map <- readr::read_csv(
+  file=file.path("depmap-data", file="ScreenSequenceMap.csv")
+)
+colnames(avana_raw_readcounts)[1] <- "sg_rna"
+
+avana_effects <- avana_raw_readcounts %>%
+  pivot_longer(cols = -sg_rna, names_to = "SequenceID", values_to = "read_count") %>%
+  # Calculate guide depletion (lower counts = more lethal)
+  group_by(SequenceID) %>%
+  mutate(
+    # Log2 transform and center by median (common pre-processing)
+    log_count = log2(read_count + 1),
+    guide_effect = log_count - median(log_count, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# aggregate guide effects to only hit melanoma types
+
+# Get cell line info - need this to identify melanoma cells (actually don't need this)
+cell_info <- depmap_metadata()
+
+# filter to all melanoma types that are not uveal, acral, mucosal, or uveal
+specific_subtypes <- c("Melanoma", "Melanoma, amelanotic")
+melanoma_cells <- cell_info %>%
+  filter(subtype_disease %in% specific_subtypes)
+
+melanoma_cells_sequences <- melanoma_cells %>% 
+  left_join(screen_sequence_map, by = c("depmap_id" = "ModelID"))
+
+melanoma_cells_sequences <- unique(melanoma_cells_sequences %>% select(SequenceID, subtype_disease))
+
+melanoma_effects <- avana_effects %>% 
+  inner_join(melanoma_cells_sequences, by = c("SequenceID" = "SequenceID"))
+
+melanoma_effects_aggregated <- melanoma_effects %>%
+  group_by(sg_rna, subtype_disease) %>%
+  summarise(
+    mean_read_count = mean(read_count, na.rm = TRUE),
+    mean_log_count = mean(log_count, na.rm = TRUE),
+    mean_guide_effect = mean(guide_effect, na.rm = TRUE),
+    n_samples = n(),
+    .groups = "drop"
+  )
 
 
+
+transcript_guide_effects <- overlaps %>% 
+  left_join(melanoma_effects_aggregated, by = c("guide_data.sgRNA" = "sg_rna")) %>% 
+  filter(subtype_disease == "Melanoma")
