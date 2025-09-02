@@ -40,3 +40,12 @@ This is based on previous work by Stephen Ostrowski.
 ## Next Steps
 - Analyze whether the guide targeting a transcript is correlated to the guide also affects the cancer cell
   * For this, I need to go through Depmap data to find Guide Effect data
+
+
+
+## MITF High Low Analysis;
+* In this side-work, we are looking at MITF-M expression distribution across Depmap cell-lines
+* From there, we'll choose a cutoff for "high" and "low" expressing cell-lines
+* We classify SequenceID's as high or low MITF expressing cell-lines
+* Run separate transcript analyses for these groups, see if correlations are different
+* I've chosen the median as the "cut-off" point
