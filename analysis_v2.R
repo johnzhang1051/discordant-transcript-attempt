@@ -274,10 +274,9 @@ overlaps <- data.frame(
 # export overlaps data because it takes a while to run
 write.csv(overlaps,"exon_guide_overlaps.csv", row.names = FALSE)
 
-#######################  Get overlap data (START HERE JOHN)
+#######################  Get overlap data
 overlaps <- readr::read_csv(
-  file="exon_guide_overlaps.csv",
-  index = FALSE
+  file="exon_guide_overlaps.csv"
 )
 
 
@@ -325,7 +324,8 @@ melanoma_effects <- avana_effects %>%
   inner_join(melanoma_cells_sequences, by = c("SequenceID" = "SequenceID"))
 
 melanoma_effects_aggregated <- melanoma_effects %>%
-  group_by(sg_rna, subtype_disease) %>%
+  group_by(sg_rna) %>%
+  #group_by(sg_rna, subtype_disease) %>%
   summarise(
     mean_read_count = mean(read_count, na.rm = TRUE),
     mean_log_count = mean(log_count, na.rm = TRUE),
@@ -337,5 +337,14 @@ melanoma_effects_aggregated <- melanoma_effects %>%
 
 
 transcript_guide_effects <- overlaps %>% 
-  left_join(melanoma_effects_aggregated, by = c("guide_data.sgRNA" = "sg_rna")) %>% 
-  filter(subtype_disease == "Melanoma")
+  left_join(melanoma_effects_aggregated, by = c("guide_data.sgRNA" = "sg_rna"))
+
+# export overlaps data because it takes a while to run
+write.csv(transcript_guide_effects,"transcript_guide_effects.csv", row.names = FALSE)
+
+#######################  Analyze relationship between transcript and guide effect (START HERE JOHN)
+transcript_guide_effects <- readr::read_csv(
+  file="transcript_guide_effects.csv"
+)
+
+transcript_guide_effects$exon_data.ensembl_transcript_id
