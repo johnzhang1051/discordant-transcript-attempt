@@ -42,6 +42,12 @@ MITF_transcript_correlations <- map_dfr(transcript_names, function(transcript) {
 colnames(MITF_transcript_correlations)[1] <- "transcript_id"
 write.csv(MITF_transcript_correlations,"correlation_results/MITF_transcript_correlations.csv", row.names = FALSE)
 
+# also export correlations that are >0.5 for pearson and spearman
+MITF_transcript_correlations_filtered <- MITF_transcript_correlations %>%
+  filter(pearson_corr >= 0.5 & spearman_corr >= 0.5)
+write.csv(MITF_transcript_correlations,"correlation_results/MITF_transcript_correlations_filtered.csv", row.names = FALSE)
+
+
 ####################### Correlation analysis for gene-level expression
 gene_names <- colnames(melanoma_gene_expression)[!colnames(melanoma_gene_expression) %in% c("model_id", "MITF", "index", "profile_id", "is_default_entry", "...1", MITF_gene)]
 total_genes <- length(gene_names)
@@ -220,6 +226,8 @@ discordant_transcripts <- cocor_results %>%
          !is.na(r_transcript), !is.na(r_gene),
          r_transcript >= 0.5, r_gene < 0.5)
 
+
+colnames(discordant_transcripts)[1] <- "transcript_id"
 # Save results
 write.csv(cocor_results, "correlation_results/cocor_results.csv", row.names = FALSE)
 write.csv(discordant_transcripts, "correlation_results/discordant_transcripts.csv", row.names = FALSE)

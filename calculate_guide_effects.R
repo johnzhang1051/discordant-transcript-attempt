@@ -4,13 +4,24 @@ library(tidyverse)
 library(dplyr)
 library(GenomicRanges)
 
-####################### Load your transcript list
-transcript_list <- readr::read_csv("your_transcript_list.csv")  # Replace with your file
-# Make sure the column is named 'transcript_id'
-colnames(transcript_list)[1] <- "transcript_id"
+####################### Load transcript lists
+discordant_transcripts <- readr::read_csv(
+  file=file.path("correlation_results", "discordant_transcripts.csv")
+)
+colnames(discordant_transcripts)[1] <- "transcript_id"
+
+
+correlated_transcripts <- readr::read_csv(
+  file=file.path("correlation_results", "MITF_transcript_correlations_filtered.csv")
+)
+
+####### EDIT THIS
+transcript_list <- correlated_transcripts
+transcript_list_name <- "correlated_transcripts"
 
 # Remove version numbers if present (e.g., "ENST00000394351.9" -> "ENST00000394351")
-transcript_list$transcript_id_clean <- sub("\\..*", "", transcript_list$transcript_id)
+discordant_transcripts$transcript_id_clean <- sub("\\..*", "", discordant_transcripts$transcript_id)
+correlated_transcripts$transcript_id_clean <- sub("\\..*", "", correlated_transcripts$transcript_id)
 
 #######################  Query biomaRt for your transcripts
 if (!requireNamespace("BiocManager", quietly = TRUE))
@@ -79,6 +90,8 @@ results <- auto_biomart_query(
 write.csv(results$structure,"biomart_structure.csv", row.names = FALSE)
 
 #######################  Get exon-level dataframe
+exon_locations <- results$structure
+
 exon_locations <- readr::read_csv(
   file="biomart_structure.csv"
 )
@@ -111,6 +124,7 @@ avana_guide_map <- avana_guide_map %>%
   )
 
 # Use GenomicRanges library to find overlaps between exon and guide coordinates for same chromosomes
+library(GenomicRanges)
 
 # Fix exon data by removing conflicting columns and converting strand
 exon_locations <- exon_locations %>%
@@ -119,7 +133,7 @@ exon_locations <- exon_locations %>%
     strand == -1 ~ "-",
     TRUE ~ "*"
   )) %>%
-  select(-strand)  # Remove conflicting column names
+  dplyr::select(-strand)  # Remove conflicting column names
 
 exon_gr <- makeGRangesFromDataFrame(
   exon_locations,
@@ -137,7 +151,7 @@ avana_guide_map <- avana_guide_map %>%
     guide_strand == -1 ~ "-", 
     TRUE ~ "*"
   )) %>%
-  select(-guide_strand)  # Remove original strand column
+  dplyr::select(-guide_strand)  # Remove original strand column
 
 guide_gr <- makeGRangesFromDataFrame(
   avana_guide_map,
@@ -196,7 +210,7 @@ melanoma_cells <- cell_info %>%
 melanoma_cells_sequences <- melanoma_cells %>% 
   left_join(screen_sequence_map, by = c("depmap_id" = "ModelID"))
 
-melanoma_cells_sequences <- unique(melanoma_cells_sequences %>% select(SequenceID, subtype_disease))
+melanoma_cells_sequences <- unique(melanoma_cells_sequences %>% dplyr::select(SequenceID, subtype_disease))
 
 melanoma_effects <- avana_effects %>% 
   inner_join(melanoma_cells_sequences, by = c("SequenceID" = "SequenceID"))
@@ -214,16 +228,43 @@ melanoma_effects_aggregated <- melanoma_effects %>%
 transcript_guide_effects <- overlaps %>% 
   left_join(melanoma_effects_aggregated, by = c("guide_data.sgRNA" = "sg_rna"))
 
+# average guide effects by transcripts_id
+transcript_aggregated_effects <- transcript_guide_effects %>%
+  group_by(exon_data.ensembl_transcript_id) %>%
+  summarise(
+    gene_name = dplyr::first(exon_data.external_gene_name),
+    n_guides = n(),
+    mean_guide_effect = mean(mean_guide_effect, na.rm = TRUE),
+    median_guide_effect = median(mean_guide_effect, na.rm = TRUE),
+    sd_guide_effect = sd(mean_guide_effect, na.rm = TRUE),
+    min_guide_effect = min(mean_guide_effect, na.rm = TRUE),
+    max_guide_effect = max(mean_guide_effect, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(mean_guide_effect))
+
 # export final results
-write.csv(transcript_guide_effects,"transcript_guide_effects.csv", row.names = FALSE)
+write.csv(transcript_aggregated_effects,paste0("correlation_results/", transcript_list_name, "_guide_effects.csv"), row.names = FALSE)
 
-#######################  Summary of results
-cat("Analysis complete!\n")
-cat("Total transcripts analyzed:", length(transcript_ids), "\n")
-cat("Total guide-exon overlaps found:", nrow(overlaps), "\n")
-cat("Transcripts with guide effects:", length(unique(transcript_guide_effects$exon_data.ensembl_transcript_id)), "\n")
 
-# Optional: Quick preview of results
-head(transcript_guide_effects %>% 
-       select(exon_data.ensembl_transcript_id, exon_data.external_gene_name, 
-              guide_data.sgRNA, mean_guide_effect, n_samples))
+library(ggplot2)
+
+# Create boxplot of guide effects
+guide_effects_plot <- ggplot(transcript_aggregated_effects, aes(x = "All Transcripts", y = mean_guide_effect)) +
+  geom_boxplot(fill = "lightblue", alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.5, size = 1) +
+  labs(
+    title = paste("Guide Effects for", str_to_title(transcript_list_name), "Transcripts"),
+    x = "",
+    y = "Mean Guide Effect",
+    subtitle = paste("n =", nrow(transcript_aggregated_effects), "transcripts")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.7)
+
+# Display the plot
+print(guide_effects_plot)
