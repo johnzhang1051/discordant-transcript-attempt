@@ -1,3 +1,5 @@
 *.csv
 .Rhistory
 .Rdata
+.DS_Store
+*.xlsx
