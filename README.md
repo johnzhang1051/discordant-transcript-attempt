@@ -40,6 +40,8 @@ This is based on previous work by Stephen Ostrowski.
 ## Next Steps
 - Analyze whether the guide targeting a transcript is correlated to the guide also affects the cancer cell
   * For this, I need to go through Depmap data to find Guide Effect data
+  * I'm planning to analyze difference in Guide Effect between discordant vs. correlated vs. all protein encoding transcripts (similar to the resubmission paper)
+  * And then maybe splitting them up further by the MITF High/Low cutoff that I explain more below
 
 
 

@@ -1,4 +1,4 @@
-r####################### Setting up environment
+####################### Setting up environment
 library(depmap)
 library(tidyverse)
 library(dplyr)
@@ -15,18 +15,21 @@ correlated_transcripts <- readr::read_csv(
   file=file.path("correlation_results", "MITF_transcript_correlations_filtered.csv")
 )
 
-####### EDIT THIS
-transcript_list <- correlated_transcripts
-transcript_list_name <- "correlated_transcripts"
 
 # Remove version numbers if present (e.g., "ENST00000394351.9" -> "ENST00000394351")
 discordant_transcripts$transcript_id_clean <- sub("\\..*", "", discordant_transcripts$transcript_id)
 correlated_transcripts$transcript_id_clean <- sub("\\..*", "", correlated_transcripts$transcript_id)
 
+####### EDIT THIS
+transcript_list <- correlated_transcripts
+transcript_list_name <- "correlated_transcripts"
+
+
+
 #######################  Query biomaRt for your transcripts
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("biomaRt")
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#  install.packages("BiocManager")
+#BiocManager::install("biomaRt")
 
 library(biomaRt)
 
@@ -87,13 +90,14 @@ results <- auto_biomart_query(
 )
 
 # export Biomart data
-write.csv(results$structure,"biomart_structure.csv", row.names = FALSE)
+write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
+
 
 #######################  Get exon-level dataframe
 exon_locations <- results$structure
 
 exon_locations <- readr::read_csv(
-  file="biomart_structure.csv"
+  file="guide_effect/exon_locations.csv"
 )
 
 #######################  Map Depmap Guides to Transcripts
@@ -172,7 +176,9 @@ overlaps <- data.frame(
 )
 
 # export overlaps data because it takes a while to run
-write.csv(overlaps,"exon_guide_overlaps.csv", row.names = FALSE)
+write.csv(overlaps, paste0("guide_effect/", transcript_list_name, "_exon_guide_overlaps.csv"), row.names = FALSE)
+
+
 
 #######################  Correlate Guide Effect to Transcripts
 
@@ -244,7 +250,7 @@ transcript_aggregated_effects <- transcript_guide_effects %>%
   filter(!is.na(mean_guide_effect))
 
 # export final results
-write.csv(transcript_aggregated_effects,paste0("correlation_results/", transcript_list_name, "_guide_effects.csv"), row.names = FALSE)
+write.csv(transcript_aggregated_effects,paste0("guide_effect/", transcript_list_name, "_guide_effects.csv"), row.names = FALSE)
 
 
 library(ggplot2)
