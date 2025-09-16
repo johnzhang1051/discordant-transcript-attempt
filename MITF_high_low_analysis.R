@@ -5,7 +5,6 @@ library(tidyverse)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-setwd("/Users/johnz/Documents/GitFiles/discordant-transcript-attempt")
 
 ####################### Getting data
 # Get transcript/isoform expression data - so we know which transcripts are expressed
@@ -78,3 +77,73 @@ describe(combined_data$ENST00000394351.9)
 
 
 
+############### ############### ############### Export classification of model-id's that are MITFM high or low
+
+# Method 1: Use median as cutoff (as suggested in your comment)
+median_threshold <- median(combined_data$`ENST00000394351.9`, na.rm = TRUE)
+
+####################### Create Classifications
+
+# Binary classification (High/Low using median)
+mitf_classifications <- combined_data %>%
+  mutate(
+    # Method 1: Simple binary classification using median
+    mitf_binary = case_when(
+      `ENST00000394351.9` >= median_threshold ~ "High",
+      `ENST00000394351.9` < median_threshold ~ "Low",
+      TRUE ~ "Unknown"
+    ),
+
+    # Add the actual expression value for reference
+    mitf_expression = `ENST00000394351.9`
+  ) %>%
+  # Select relevant columns for export
+  select(
+    depmap_id,
+    cell_line_name,
+    stripped_cell_line_name,
+    subtype_disease,
+    mitf_expression,
+    mitf_binary
+  )
+
+####################### Summary Statistics
+
+# Binary classification counts
+binary_summary <- mitf_classifications %>%
+  count(mitf_binary) %>%
+  mutate(percentage = round(100 * n / sum(n), 1))
+print(binary_summary)
+
+####################### Export Classifications
+
+# Export full classification table
+full_output_file <- "mitf_high_low/mitf_expression_classifications_full.csv"
+write.csv(mitf_classifications, full_output_file, row.names = FALSE)
+
+# Export simplified binary classification (most commonly used)
+binary_output <- mitf_classifications %>%
+  select(depmap_id, cell_line_name, mitf_expression, mitf_binary)
+binary_output_file <- "mitf_classifications/mitf_binary_classification.csv"
+write.csv(binary_output, binary_output_file, row.names = FALSE)
+
+####################### Create Visualization with Classifications
+
+# Enhanced histogram showing classifications
+classification_plot <- ggplot(mitf_classifications, aes(x = mitf_expression)) +
+  geom_histogram(aes(fill = mitf_binary), bins = 20, alpha = 0.7, color = "black") +
+  geom_vline(xintercept = median_threshold, 
+             color = "red", linetype = "dashed", size = 1.2) +
+  scale_fill_manual(values = c("High" = "darkred", "Low" = "steelblue")) +
+  labs(
+    title = "MITF-M Expression Classification in Melanoma Cell Lines",
+    subtitle = paste("Binary classification using median threshold =", round(median_threshold, 2)),
+    x = "MITF Expression (TPM Log+1)",
+    y = "Number of Cell Lines",
+    fill = "MITF Classification",
+    caption = "Red dashed line: Median threshold for High/Low classification"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(classification_plot)

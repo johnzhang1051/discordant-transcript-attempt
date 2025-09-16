@@ -21,8 +21,11 @@ discordant_transcripts$transcript_id_clean <- sub("\\..*", "", discordant_transc
 correlated_transcripts$transcript_id_clean <- sub("\\..*", "", correlated_transcripts$transcript_id)
 
 ####### EDIT THIS
-transcript_list <- correlated_transcripts
-transcript_list_name <- "correlated_transcripts"
+transcript_list <- discordant_transcripts
+#transcript_list <- "correlated_transcripts"
+
+transcript_list_name <- "discordant_transcripts"
+#transcript_list_name <- "correlated_transcripts"
 
 
 
@@ -97,7 +100,7 @@ write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exo
 exon_locations <- results$structure
 
 exon_locations <- readr::read_csv(
-  file="guide_effect/exon_locations.csv"
+  file=paste0("guide_effect/", transcript_list_name, "_exon_locations.csv")
 )
 
 #######################  Map Depmap Guides to Transcripts

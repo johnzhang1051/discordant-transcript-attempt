@@ -55,9 +55,9 @@ print(MITF_transcript_column)
 # using ensembl Biomart R package
 # documentation: https://useast.ensembl.org/info/data/biomart/biomart_r_package.html
 
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("biomaRt")
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#  install.packages("BiocManager")
+# BiocManager::install("biomaRt")
 
 library(biomaRt)
 # Function to automatically query biomaRt with attribute grouping

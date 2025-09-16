@@ -1,6 +1,6 @@
 # discordant-transcript-attempt
 
-This project is my first attempt at using Depmap data to identify discordant transcripts for MITF expression.
+This project is my first attempt at using Depmap data to identify discordant transcripts for MITF expression, and finding interesting transcripts to study further.
 
 For context, previously analyses have been done to find genes that correlated strongly to MITF expression.
 
@@ -21,10 +21,43 @@ This is based on previous work by Stephen Ostrowski.
   * How much each transcript/isoform is expressed in TPM units
 - AvanaGuide
   * Maps guide RNA's (Crispr) to genes and their locations 
-[Ensembl](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
 - Biomart R Package
   * Lets us search genetic attributes (eg `exon_start_position`, `transcript_id`) by filtering to specific values such as gene, transcript, or exon id's
+  * [Documentation](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
 
+## Analysis Flow:
+1. `clean_data.R`
+   * Starts with Depmap transcript, gene expression, and cell-line data
+   * Filter to only melanoma cell-lines for all 3 datasets
+   * Clean column names
+   * Identify MITF gene and MITF transcript column (important because version numbers change)
+   * These are used in `identify_discordant.R`
+2. `MITF_high_low_analysis.R`:
+   * Starts with Depmap cell-line data, filter to `Melanoma`, `Melanoma, amelanotic`
+   * Join in expression data for MITF-M (`ENST00000394351.9`)
+   * Finds median expression for all cell-lines, using that as cutoff
+   * Classifies Depmap cell-lines as MITF `high` or `low`
+   * Exports list to `mitf_high_low/`
+3. `identify_discordant.R`
+   * Starts with Depmap transcript and gene expression data
+   * Using `CoCor` and `FDR < 0.05`, identifies discordant and correlated transcripts
+   * Export to `correlation_results/`
+   * NOTE: I'm thinking of using the MITF high/low and filtering to only MITF high for this code
+      * But I'm not sure if we'll have enough data. I'll try it first to see.
+4. `calculate_guide_effects.R`
+   * Starting with discordant or correlated transcript list
+   * Use BiomartR to get their exon coordinates
+   * Import Depmap AvanaGuide Crispr data
+   * Determine which transcripts were targeted in Crispr screen, and find `read_counts`
+   * From `read_counts`, calculate guide effect (see below for how to calculate)
+   * Export guide_effect results
+5. `analyze_effects.R`
+   * Starting with `guide_effect` data
+   * List which transcripts had lowest guide_effect
+   * We can conclude these are most "essential" for survival
+   * Bc when these transcripts were screened, the cells died a lot
+   * So likely these transcripts are important
+   * And since we're looking at melanoma cell-lines, perhaps these transcripts are linked to melanoma
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
@@ -36,18 +69,22 @@ This is based on previous work by Stephen Ostrowski.
   * `analysis_v1.R`: this is the old version that uses Ensembl's REST API to retrieve exon data (limited to 54k pulls, which is not enough)
   * `analysis_v2.R`: this is the newest version of my code that uses Ensembl's Biomart R package to pull all exon data instead (much more effective for the large amounts of data we need)
 - I've used `GenomicRanges` library to find overlaps between `AvanaGuide` guide coordinates and the **transcript** coordinates, so we know which transcripts were targeted by the guides
+- Drafted Guide effect calculation for transcripts targeted by guides (~81% discordant targeted by guides)
+   * **Guide Effect is calculated by:**
+   * Getting readcounts for each sample
+   * Doing log2(read_count + 1) to get guide effect
+   * For each cell-line, we find the median log2 value
+   * Then we subtract that median from each value like so:
+      * `(guide_effect_raw - guide_effect_median) = guide_effect_final`
+   * Thus, the guide effect is normalized and centered 
+- Determined expression cut-off for MITF-high vs. low expressing cell-lines
 
 ## Next Steps
-- Analyze whether the guide targeting a transcript is correlated to the guide also affects the cancer cell
-  * For this, I need to go through Depmap data to find Guide Effect data
-  * I'm planning to analyze difference in Guide Effect between discordant vs. correlated vs. all protein encoding transcripts (similar to the resubmission paper)
-  * And then maybe splitting them up further by the MITF High/Low cutoff that I explain more below
-
-
-
-## MITF High Low Analysis;
-* In this side-work, we are looking at MITF-M expression distribution across Depmap cell-lines
-* From there, we'll choose a cutoff for "high" and "low" expressing cell-lines
-* We classify SequenceID's as high or low MITF expressing cell-lines
-* Run separate transcript analyses for these groups, see if correlations are different
-* I've chosen the median as the "cut-off" point
+* Test out MITF-high vs. low cutoff - if I filter to only MITF-high cell-lines, how do my results look? Do I have enough data points?
+* Verify that my datasets are up-to-date and correct, and that my approach is right.
+   * Is my cell-line data accurate?
+   * Is my approach for checking if signals targeting transcripts using exon-coordinates right?
+   * Is there a better way than using median to classify MITF M high vs. low?
+   * Is `guide-effect` calculation correct?
+   * What should the cutoffs be for "essential" transcripts for cell survival based on `guide-effect`?
+   
