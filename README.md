@@ -21,6 +21,8 @@ This is based on previous work by Stephen Ostrowski.
   * How much each transcript/isoform is expressed in TPM units
 - AvanaGuide
   * Maps guide RNA's (Crispr) to genes and their locations 
+- ScreenSequenceMap
+   * 
 - Biomart R Package
   * Lets us search genetic attributes (eg `exon_start_position`, `transcript_id`) by filtering to specific values such as gene, transcript, or exon id's
   * [Documentation](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
@@ -32,7 +34,7 @@ This is based on previous work by Stephen Ostrowski.
    * Clean column names
    * Identify MITF gene and MITF transcript column (important because version numbers change)
    * These are used in `identify_discordant.R`
-2. `MITF_high_low_analysis.R`:
+2. `identify_MITF_high_low.R`:
    * Starts with Depmap cell-line data, filter to `Melanoma`, `Melanoma, amelanotic`
    * Join in expression data for MITF-M (`ENST00000394351.9`)
    * Finds median expression for all cell-lines, using that as cutoff
@@ -58,6 +60,10 @@ This is based on previous work by Stephen Ostrowski.
    * Bc when these transcripts were screened, the cells died a lot
    * So likely these transcripts are important
    * And since we're looking at melanoma cell-lines, perhaps these transcripts are linked to melanoma
+5. `analyze_MITF_high_low.R`
+   * Starting with `__` data and `MITF_high_low` expression data
+   * Filter to data from cell-lines that were MITF-M high expressing
+   * 
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
