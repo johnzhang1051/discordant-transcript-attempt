@@ -263,9 +263,45 @@ transcript_mitf_correlations <- transcript_guide_effects_by_cell %>%
       2 * pt(abs(t_stat), df = n_cell_lines - 2, lower.tail = FALSE)
     } else NA
   ) %>%
+  mutate(
+    # Simple correlation p-value calculation
+    spearman_pvalue = if(!is.na(spearman_corr) & n_cell_lines > 3) {
+      t_stat <- spearman_corr * sqrt((n_cell_lines - 2) / (1 - spearman_corr^2))
+      2 * pt(abs(t_stat), df = n_cell_lines - 2, lower.tail = FALSE)
+    } else NA
+  ) %>%
   ungroup() %>%
   # Add FDR correction
   mutate(pearson_fdr = p.adjust(pearson_pvalue, method = "BH")) %>%
+  mutate(spearman_fdr = p.adjust(spearman_pvalue, method = "BH")) %>%
   arrange(pearson_corr)
+  
 
+ggplot(transcript_mitf_correlations, aes(x = pearson_corr)) +
+  geom_histogram(bins = 30, fill = "lightgreen", alpha = 0.7, color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red", size = 1) +
+  geom_vline(xintercept = c(-0.3, 0.3), linetype = "dashed", color = "orange", size = 0.8) +
+  labs(
+    title = "Distribution of MITF-Guide Effect Correlations",
+    x = "Pearson Correlation (MITF Expression vs Guide Effect)",
+    y = "Number of Transcripts",
+    subtitle = paste("n =", nrow(transcript_mitf_correlations), "transcripts"),
+    caption = "Red line = no correlation, Orange lines = ±0.3 thresholds"
+  ) +
+  theme_minimal()
 
+ggplot(transcript_mitf_correlations, aes(x = spearman_corr)) +
+  geom_histogram(bins = 30, fill = "lightgreen", alpha = 0.7, color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red", size = 1) +
+  geom_vline(xintercept = c(-0.3, 0.3), linetype = "dashed", color = "orange", size = 0.8) +
+  labs(
+    title = "Distribution of MITF-Guide Effect Correlations",
+    x = "Spearman Correlation (MITF Expression vs Guide Effect)",
+    y = "Number of Transcripts",
+    subtitle = paste("n =", nrow(transcript_mitf_correlations), "transcripts"),
+    caption = "Red line = no correlation, Orange lines = ±0.3 thresholds"
+  ) +
+  theme_minimal()
+
+library(psych)
+describe(transcript_mitf_correlations)
