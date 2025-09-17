@@ -169,7 +169,6 @@ if(nrow(valid_pairs) > 10) {
   
   cat("Mean difference (High - Low):", round(t_test_result$estimate, 4), "\n")
   cat("P-value:", format(t_test_result$p.value, scientific = TRUE), "\n")
-}
 
 ####################### Visualizations
 
@@ -224,3 +223,49 @@ if(nrow(comparison_table) > 0) {
 # Export detailed by MITF
 detailed_output_file <- paste0("guide_effect_mitf_split/", transcript_list_name, "_guide_effects_by_mitf_detailed.csv")
 write.csv(transcript_effects_by_mitf, detailed_output_file, row.names = FALSE)
+
+
+####################### Correlation Analysis: MITF Expression vs Guide Effects
+# Calculate guide effects for each cell line individually (not aggregated)
+melanoma_effects_by_cell_line <- melanoma_effects %>%
+  group_by(sg_rna, depmap_id, mitf_expression) %>%
+  summarise(
+    mean_guide_effect = mean(guide_effect, na.rm = TRUE),
+    n_replicates = n(),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(mean_guide_effect))
+
+# Map to transcripts for correlation analysis
+transcript_guide_effects_by_cell <- overlaps %>% 
+  left_join(melanoma_effects_by_cell_line, by = c("guide_data.sgRNA" = "sg_rna")) %>%
+  filter(!is.na(mean_guide_effect))
+
+# Calculate correlations for each transcript
+transcript_mitf_correlations <- transcript_guide_effects_by_cell %>%
+  group_by(exon_data.ensembl_transcript_id) %>%
+  filter(n() >= 5) %>%  # Need at least 5 cell lines for meaningful correlation
+  summarise(
+    gene_name = dplyr::first(exon_data.external_gene_name),
+    n_cell_lines = n(),
+    n_guides = length(unique(guide_data.sgRNA)),
+    pearson_corr = cor(mitf_expression, mean_guide_effect, method = "pearson", use = "complete.obs"),
+    spearman_corr = cor(mitf_expression, mean_guide_effect, method = "spearman", use = "complete.obs"),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(pearson_corr)) %>%
+  # Calculate p-values for correlations
+  rowwise() %>%
+  mutate(
+    # Simple correlation p-value calculation
+    pearson_pvalue = if(!is.na(pearson_corr) & n_cell_lines > 3) {
+      t_stat <- pearson_corr * sqrt((n_cell_lines - 2) / (1 - pearson_corr^2))
+      2 * pt(abs(t_stat), df = n_cell_lines - 2, lower.tail = FALSE)
+    } else NA
+  ) %>%
+  ungroup() %>%
+  # Add FDR correction
+  mutate(pearson_fdr = p.adjust(pearson_pvalue, method = "BH")) %>%
+  arrange(pearson_corr)
+
+

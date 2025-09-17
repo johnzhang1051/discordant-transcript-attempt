@@ -61,9 +61,9 @@ This is based on previous work by Stephen Ostrowski.
    * So likely these transcripts are important
    * And since we're looking at melanoma cell-lines, perhaps these transcripts are linked to melanoma
 5. `analyze_MITF_high_low.R`
-   * Starting with `__` data and `MITF_high_low` expression data
-   * Filter to data from cell-lines that were MITF-M high expressing
-   * 
+   * Starting with the `MITF_high_low` classifications
+   * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
+   * Then reports whether there were differences in guide effects
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
@@ -84,6 +84,9 @@ This is based on previous work by Stephen Ostrowski.
       * `(guide_effect_raw - guide_effect_median) = guide_effect_final`
    * Thus, the guide effect is normalized and centered 
 - Determined expression cut-off for MITF-high vs. low expressing cell-lines
+- I tried running the guide effect analysis while splitting MITF-high vs. low
+   * When I first tried using the median (~67) as the cutoff, guide_effects were same for high vs. low
+   * When I set cutoff to 100, then 
 
 ## Next Steps
 * Test out MITF-high vs. low cutoff - if I filter to only MITF-high cell-lines, how do my results look? Do I have enough data points?
