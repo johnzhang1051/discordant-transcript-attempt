@@ -182,6 +182,14 @@ overlaps <- data.frame(
 write.csv(overlaps, paste0("guide_effect/", transcript_list_name, "_exon_guide_overlaps.csv"), row.names = FALSE)
 
 
+###################### Look at non-overlaps
+
+transcripts_with_guides <- unique(overlaps$exon_data.ensembl_transcript_id)
+non_overlaps <- transcript_list %>%
+  filter(!transcript_id_clean %in% transcripts_with_guides)
+
+write.csv(non_overlaps, paste0("guide_effect/", transcript_list_name, "_non_overlaps.csv"), row.names = FALSE)
+
 
 #######################  Correlate Guide Effect to Transcripts
 
