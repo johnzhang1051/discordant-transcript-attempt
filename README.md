@@ -64,6 +64,10 @@ This is based on previous work by Stephen Ostrowski.
    * Starting with the `MITF_high_low` classifications
    * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
    * Then reports whether there were differences in guide effects
+5. `analyze_unique_promoters.R`
+   * For list of transcripts, finds the # of promoters based on same data as resubmission
+   * About ~60% of transcripts in our list don't have any promoter data on them
+   * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data

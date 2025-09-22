@@ -48,7 +48,7 @@ Kenny <- standardize_transcripts(Kenny)
 Laurette <- standardize_transcripts(Laurette)
 Louph <- standardize_transcripts(Louph)
 
-####################### UNIQUE PROMOTER ANALYSIS
+####################### UNIQUE PROMOTER ANALYSIS WITH PROMOTER COUNTS
 
 # Combine coordinates from all three datasets
 all_transcript_coords <- bind_rows(
@@ -58,7 +58,7 @@ all_transcript_coords <- bind_rows(
 ) %>%
   distinct(transcript_id, .keep_all = TRUE)  # Keep first occurrence if transcript appears in multiple datasets
 
-# Extract transcript coordinates from Kenny dataset for promoter analysis
+# Extract transcript coordinates and define promoter regions
 transcript_coords <- all_transcript_coords %>%
   dplyr::select(transcript_id, seqnames, start, end, strand, geneId) %>%
   distinct() %>%
@@ -84,24 +84,42 @@ promoter_gr <- makeGRangesFromDataFrame(
 
 # Find overlaps between promoter regions
 overlaps_promoter <- findOverlaps(promoter_gr, promoter_gr)
-overlap_summary <- as.data.frame(overlaps_promoter) %>%
+overlap_df <- as.data.frame(overlaps_promoter) %>%
   filter(queryHits != subjectHits)  # Exclude self-overlaps
 
-# Get all transcripts that have ANY overlap with other transcripts
-transcripts_with_overlaps <- unique(c(overlap_summary$queryHits, overlap_summary$subjectHits))
-
-# Identify transcripts with unique (non-overlapping) promoters
-unique_promoter_indices <- setdiff(1:length(promoter_gr), transcripts_with_overlaps)
-unique_promoter_transcripts <- transcript_coords$transcript_id[unique_promoter_indices]
-
-
-####################### ANALYZE NON-OVERLAPPING DISCORDANT TRANSCRIPTS
-
-# Analyze non-overlapping transcripts for unique promoters
-non_overlap_with_promoter_info <- non_overlap_transcripts %>%
+# Count how many total promoters are in each promoter region (including self)
+promoter_counts <- overlap_df %>%
+  group_by(queryHits) %>%
+  summarise(n_other_promoters = n(), .groups = "drop") %>%
   mutate(
-    has_unique_promoter = transcript_id %in% unique_promoter_transcripts,
-    has_coordinate_data = transcript_id %in% transcript_coords$transcript_id,
+    transcript_id = transcript_coords$transcript_id[queryHits],
+    n_promoters = n_other_promoters + 1  # Add 1 to include the transcript itself
+  ) %>%
+  select(transcript_id, n_promoters)
+
+# Create comprehensive promoter annotation
+promoter_annotation <- transcript_coords %>%
+  select(transcript_id) %>%
+  left_join(promoter_counts, by = "transcript_id") %>%
+  mutate(
+    n_promoters = ifelse(is.na(n_promoters), 1, n_promoters),  # Transcripts with no overlaps have 1 promoter
+    has_unique_promoter = n_promoters == 1,
+    promoter_category = case_when(
+      n_promoters == 1 ~ "Unique (1 promoter)",
+      n_promoters == 2 ~ "2 promoters",
+      n_promoters <= 5 ~ "3-5 promoters",
+      n_promoters <= 10 ~ "6-10 promoters",
+      TRUE ~ ">10 promoters"
+    )
+  )
+
+####################### ANALYZE NON-OVERLAPPING DISCORDANT TRANSCRIPTS WITH PROMOTER COUNTS
+
+# Analyze non-overlapping transcripts for promoter information
+non_overlap_with_promoter_info <- non_overlap_transcripts %>%
+  left_join(promoter_annotation, by = "transcript_id") %>%
+  mutate(
+    has_coordinate_data = !is.na(n_promoters),
     has_crispr_coverage = transcript_id %in% transcripts_with_crispr
   )
 
@@ -117,78 +135,105 @@ non_overlap_summary <- non_overlap_with_promoter_info %>%
     .groups = "drop"
   )
 
-####################### COMPARATIVE ANALYSIS
+# Detailed promoter category breakdown
+promoter_category_summary <- non_overlap_with_promoter_info %>%
+  filter(has_coordinate_data) %>%
+  count(promoter_category) %>%
+  mutate(proportion = n / sum(n))
 
-# Compare promoter status between CRISPR-covered vs non-covered transcripts
+####################### COMPARATIVE ANALYSIS WITH PROMOTER COUNTS
 
-# Get CRISPR-covered transcripts and their promoter status
-crispr_covered_transcripts <- data.frame(
+# Compare promoter counts between CRISPR-covered vs non-covered transcripts
+crispr_covered_with_promoter <- data.frame(
   transcript_id = transcripts_with_crispr,
   stringsAsFactors = FALSE
 ) %>%
+  left_join(promoter_annotation, by = "transcript_id") %>%
   mutate(
-    has_unique_promoter = transcript_id %in% unique_promoter_transcripts,
-    has_coordinate_data = transcript_id %in% transcript_coords$transcript_id,
+    has_coordinate_data = !is.na(n_promoters),
     crispr_status = "CRISPR_covered"
   )
 
-# Combine with non-overlapping transcripts
+# Combine datasets for comparison
 comparison_data <- bind_rows(
   non_overlap_with_promoter_info %>% 
-    select(transcript_id, has_unique_promoter, has_coordinate_data) %>%
+    select(transcript_id, n_promoters, has_unique_promoter, has_coordinate_data, promoter_category) %>%
     mutate(crispr_status = "Non_CRISPR"),
-  crispr_covered_transcripts %>% 
-    select(transcript_id, has_unique_promoter, has_coordinate_data, crispr_status)
+  crispr_covered_with_promoter %>% 
+    select(transcript_id, n_promoters, has_unique_promoter, has_coordinate_data, promoter_category, crispr_status)
 )
 
-# Summary by group
-comparison_summary <- comparison_data %>%
-  filter(has_coordinate_data) %>%  # Only include transcripts with coordinate data
+# Summary by group including promoter counts
+comparison_summary_detailed <- comparison_data %>%
+  filter(has_coordinate_data) %>%
   group_by(crispr_status) %>%
   summarise(
     total = n(),
     unique_promoter = sum(has_unique_promoter, na.rm = TRUE),
-    overlapping_promoter = sum(!has_unique_promoter, na.rm = TRUE),
+    shared_promoter = sum(!has_unique_promoter, na.rm = TRUE),
     prop_unique = unique_promoter / total,
+    mean_promoters = mean(n_promoters, na.rm = TRUE),
+    median_promoters = median(n_promoters, na.rm = TRUE),
+    max_promoters = max(n_promoters, na.rm = TRUE),
     .groups = "drop"
   )
 
-print("Comparison of promoter status between CRISPR-covered and non-covered transcripts:")
-print(comparison_summary)
+print("Detailed comparison including promoter overlap counts:")
+print(comparison_summary_detailed)
 
-####################### VISUALIZATION
+####################### VISUALIZATION WITH PROMOTER COUNTS
 
-# Create visualization of promoter status comparison
-plot_data <- comparison_data %>%
+# Create visualization of promoter category distribution
+plot_data_detailed <- comparison_data %>%
   filter(has_coordinate_data) %>%
   mutate(
-    promoter_status = ifelse(has_unique_promoter, "Unique Promoter", "Overlapping Promoter"),
-    crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR")
+    crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR"),
+    promoter_category = factor(promoter_category, 
+                               levels = c("Unique (0 overlaps)", "1 overlap", "2-5 overlaps", "6-10 overlaps", ">10 overlaps"))
   )
 
-write.csv(plot_data, "unique_promoters/transcripts_non_screen_unique_promoter.csv", row.names = FALSE)
-
-# Bar plot showing proportions
-ggplot(plot_data, aes(x = crispr_label, fill = promoter_status)) +
+# Stacked bar plot showing promoter category distribution
+ggplot(plot_data_detailed, aes(x = crispr_label, fill = promoter_category)) +
   geom_bar(position = "fill") +
-  scale_fill_manual(values = c("Unique Promoter" = "lightblue", "Overlapping Promoter" = "lightcoral")) +
+  scale_fill_brewer(type = "qual", palette = "Set3") +
   labs(
-    title = "Promoter Status: CRISPR-Covered vs Non-CRISPR Discordant Transcripts",
+    title = "Promoter Overlap Categories: CRISPR-Covered vs Non-CRISPR Discordant Transcripts",
     x = "CRISPR Coverage Status",
     y = "Proportion",
-    fill = "Promoter Status"
+    fill = "Promoter Category"
   ) +
   theme_minimal() +
   scale_y_continuous(labels = scales::percent_format())
 
-# Count plot
-ggplot(plot_data, aes(x = crispr_label, fill = promoter_status)) +
+# Count plot by category
+ggplot(plot_data_detailed, aes(x = crispr_label, fill = promoter_category)) +
   geom_bar(position = "dodge") +
-  scale_fill_manual(values = c("Unique Promoter" = "lightblue", "Overlapping Promoter" = "lightcoral")) +
+  scale_fill_brewer(type = "qual", palette = "Set3") +
   labs(
-    title = "Count of Transcripts by Promoter Status and CRISPR Coverage",
+    title = "Count of Transcripts by Promoter Overlap Category and CRISPR Coverage",
     x = "CRISPR Coverage Status",
     y = "Number of Transcripts",
-    fill = "Promoter Status"
+    fill = "Promoter Category"
   ) +
   theme_minimal()
+
+# Box plot of number of promoters per transcript
+plot_data_for_boxplot <- comparison_data %>%
+  filter(has_coordinate_data) %>%
+  mutate(crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR"))
+
+ggplot(plot_data_for_boxplot, aes(x = crispr_label, y = n_promoters, fill = crispr_label)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("CRISPR Covered" = "lightblue", "Non-CRISPR" = "lightcoral")) +
+  labs(
+    title = "Number of Promoters per Transcript",
+    x = "CRISPR Coverage Status",
+    y = "Number of Promoters",
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Save detailed results
+write.csv(comparison_data, "unique_promoters/transcripts_promoter_detailed_analysis.csv", row.names = FALSE)
+write.csv(promoter_annotation, "unique_promoters/all_transcripts_promoter_data.csv", row.names = FALSE)
