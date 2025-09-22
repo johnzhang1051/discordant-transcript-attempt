@@ -7,6 +7,7 @@ library(GenomicRanges)
 
 # Fix select() conflicts
 conflict_prefer("select", "dplyr")
+conflicts_prefer(GenomicRanges::setdiff)
 conflict_prefer("filter", "dplyr")
 
 ####################### Load Required Data
@@ -164,6 +165,8 @@ plot_data <- comparison_data %>%
     promoter_status = ifelse(has_unique_promoter, "Unique Promoter", "Overlapping Promoter"),
     crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR")
   )
+
+write.csv(plot_data, "unique_promoters/transcripts_non_screen_unique_promoter.csv", row.names = FALSE)
 
 # Bar plot showing proportions
 ggplot(plot_data, aes(x = crispr_label, fill = promoter_status)) +
