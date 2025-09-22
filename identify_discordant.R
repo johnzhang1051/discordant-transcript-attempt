@@ -122,7 +122,7 @@ transcript_gene_mapping <- getBM(
 transcript_gene_map <- transcript_gene_mapping %>%
   dplyr::select(transcript_ID = ensembl_transcript_id, 
                 Gene = external_gene_name) %>%
-  dplyr::filter(!is.na(Gene)) %>%
+  dplyr::filter(!is.na(Gene))
 
 ####################### CoCor Analysis (ADDED)
 library(cocor)
@@ -138,6 +138,7 @@ gene_expr_raw <- melanoma_gene_expression %>%
   column_to_rownames("model_id")
 
 # Find common samples and align both matrices
+conflicts_prefer(GenomicRanges::intersect)
 common_samples <- intersect(rownames(trans_expr_raw), rownames(gene_expr_raw))
 trans_expr_raw <- trans_expr_raw[common_samples, ]
 gene_expr_raw <- gene_expr_raw[common_samples, ]
@@ -145,12 +146,16 @@ gene_expr_raw <- gene_expr_raw[common_samples, ]
 # Reference: MITF transcript expression
 y <- trans_expr_raw[[MITF_transcript]]
 
+# transcript_id needs to be cleaned
+colnames(trans_expr_raw) <- sub("\\..*", "", colnames(trans_expr_raw))
+
+# Gene needs to be cleaned
+colnames(gene_expr_raw) <- sub(" \\(\\d+\\)$", "", colnames(gene_expr_raw))
+
 # Filter for valid pairs using the correct matrices
 valid_pairs <- transcript_gene_map %>%
-  rowwise() %>%
-  filter(transcript_in_cols(transcript_ID, colnames(trans_expr_raw)),
-         gene_in_cols(Gene, colnames(gene_expr_raw))) %>%
-  ungroup() %>%
+  filter(transcript_ID %in% colnames(trans_expr_raw),
+         Gene %in% colnames(gene_expr_raw)) %>%
   filter(!is.na(Gene), Gene != "")
 
 # Updated CoCor test function with length checking

@@ -8,8 +8,9 @@ transcript_expression_data <- readr::read_csv(
   file=file.path("depmap-data", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv")
 )
 colnames(transcript_expression_data)[1] <- "index"
+
 # Filter out ACH-000931 and ACH-000008 because duplicates
-duplicate_model_id <- c("ACH-000008", "ACH-000931")  # Add any others you found
+duplicate_model_id <- transcript_expression_data$model_id[duplicated(transcript_expression_data$model_id)]  # Add any others you found
 transcript_expression_data <- transcript_expression_data %>%
   filter(!model_id %in% duplicate_model_id)
 
@@ -21,19 +22,18 @@ colnames(protein_gene_expression_data)[1] <- "model_id"
 
 ####################### Filter models/cell-lines to melanoma and protein-encoding transcripts (do that later)
 # Get cell line info - need this to identify melanoma cells
-cell_info <- depmap_metadata()
-
+cell_info <- read.csv("depmap-data/Model.csv")
 
 # filter to all melanoma types that are not uveal, acral, mucosal, or uveal
-specific_subtypes <- c("Melanoma", "Melanoma, amelanotic")
+specific_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
 melanoma_cells <- cell_info %>%
-  filter(subtype_disease %in% specific_subtypes)
+  filter(OncotreeSubtype %in% specific_subtypes)
 
 # Subset for melanoma cell lines only
 melanoma_transcript_expression <- transcript_expression_data %>%
-  filter(model_id %in% melanoma_cells$depmap_id)
+  filter(model_id %in% melanoma_cells$ModelID)
 melanoma_gene_expression <- protein_gene_expression_data %>%
-  filter(model_id %in% melanoma_cells$depmap_id)
+  filter(model_id %in% melanoma_cells$ModelID)
 
 # Subset gene expression to only samples in transcript data
 melanoma_gene_expression <- melanoma_gene_expression %>%

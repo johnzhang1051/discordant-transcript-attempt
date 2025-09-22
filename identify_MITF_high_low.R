@@ -1,6 +1,5 @@
 ####################### Setting up environment
 
-library(depmap)
 library(tidyverse)
 library(dplyr)
 library(tidyr)
@@ -14,12 +13,13 @@ transcript_expression_data <- readr::read_csv(
 colnames(transcript_expression_data)[1] <- "index"
 
 # Get cell line info - need this to identify melanoma cells (actually don't need this)
-cell_info <- depmap_metadata()
+cell_info <- read.csv("depmap-data/Model.csv")
+
 
 # filter to all melanoma types that are not uveal, acral, mucosal, or uveal
-specific_subtypes <- c("Melanoma", "Melanoma, amelanotic")
+specific_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
 melanoma_cells <- cell_info %>%
-  filter(subtype_disease %in% specific_subtypes)
+  filter(OncotreeSubtype %in% specific_subtypes)
 
 ####################### Filter data
 
@@ -30,7 +30,7 @@ MITF_expression_data <- transcript_expression_data %>%
 
 ####################### Combine data
 combined_data <- melanoma_cells %>%
-  inner_join(MITF_expression_data, by = c("depmap_id" = "model_id"))
+  inner_join(MITF_expression_data, by = c("ModelID" = "model_id"))
 
 combined_data <- combined_data %>%
   filter(!is.na(`ENST00000394351.9`))
@@ -99,10 +99,10 @@ mitf_classifications <- combined_data %>%
   ) %>%
   # Select relevant columns for export
   select(
-    depmap_id,
-    cell_line_name,
-    stripped_cell_line_name,
-    subtype_disease,
+    ModelID,
+    CellLineName,
+    StrippedCellLineName,
+    OncotreeSubtype,
     mitf_expression,
     mitf_binary
   )
@@ -123,7 +123,7 @@ write.csv(mitf_classifications, full_output_file, row.names = FALSE)
 
 # Export simplified binary classification (most commonly used)
 binary_output <- mitf_classifications %>%
-  select(depmap_id, cell_line_name, mitf_expression, mitf_binary)
+  select(ModelID, CellLineName, mitf_expression, mitf_binary)
 binary_output_file <- "mitf_high_low/mitf_binary_classification.csv"
 write.csv(binary_output, binary_output_file, row.names = FALSE)
 

@@ -43,18 +43,18 @@ screen_sequence_map <- readr::read_csv(
 ####################### Process Cell Line Data (Enhanced with MITF)
 
 # Get cell line info and add MITF classification
-cell_info <- depmap_metadata()
+cell_info <- read.csv("depmap-data/Model.csv")
 
 # Filter to melanoma cells and join with MITF classification
-specific_subtypes <- c("Melanoma", "Melanoma, amelanotic")
+specific_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
 melanoma_cells <- cell_info %>%
-  filter(subtype_disease %in% specific_subtypes) %>%
+  filter(OncotreeSubtype %in% specific_subtypes) %>%
   left_join(mitf_classifications, by = "depmap_id") %>%
   filter(!is.na(mitf_binary))  # Only keep cells with MITF classification
 
 # Create sequence mapping with MITF status
 melanoma_cells_sequences <- melanoma_cells %>% 
-  left_join(screen_sequence_map, by = c("depmap_id" = "ModelID")) %>%
+  left_join(screen_sequence_map, by = c("ModelID" = "ModelID")) %>%
   select(SequenceID, subtype_disease.x, depmap_id, mitf_binary, mitf_expression)
 
 ####################### Calculate Guide Effects (Same as Original)

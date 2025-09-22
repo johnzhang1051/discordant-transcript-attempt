@@ -251,17 +251,18 @@ avana_effects <- avana_raw_readcounts %>%
 # aggregate guide effects to only hit melanoma types
 
 # Get cell line info - need this to identify melanoma cells
-cell_info <- depmap_metadata()
+cell_info <- read.csv("depmap-data/Model.csv")
+
 
 # filter to all melanoma types that are not uveal, acral, mucosal, or uveal
-specific_subtypes <- c("Melanoma", "Melanoma, amelanotic")
+specific_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
 melanoma_cells <- cell_info %>%
-  filter(subtype_disease %in% specific_subtypes)
+  filter(OncotreeSubtype %in% specific_subtypes)
 
 melanoma_cells_sequences <- melanoma_cells %>% 
-  left_join(screen_sequence_map, by = c("depmap_id" = "ModelID"))
+  left_join(screen_sequence_map, by = c("ModelID" = "ModelID"))
 
-melanoma_cells_sequences <- unique(melanoma_cells_sequences %>% dplyr::select(SequenceID, subtype_disease))
+melanoma_cells_sequences <- unique(melanoma_cells_sequences %>% dplyr::select(SequenceID, OncotreeSubtype))
 
 melanoma_effects <- avana_effects %>% 
   inner_join(melanoma_cells_sequences, by = c("SequenceID" = "SequenceID"))

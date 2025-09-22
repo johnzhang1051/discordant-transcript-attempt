@@ -19,6 +19,8 @@ This is based on previous work by Stephen Ostrowski.
   * How much each transcript/isoform is expressed in TPM units
 - OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded
   * How much each transcript/isoform is expressed in TPM units
+- Model
+   * Metadata describing all cancer models/cell lines within DepMap portal
 - AvanaGuide
   * Maps guide RNA's (Crispr) to genes and their locations 
 - ScreenSequenceMap

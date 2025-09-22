@@ -189,7 +189,7 @@ plot_data_detailed <- comparison_data %>%
   mutate(
     crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR"),
     promoter_category = factor(promoter_category, 
-                               levels = c("Unique (0 overlaps)", "1 overlap", "2-5 overlaps", "6-10 overlaps", ">10 overlaps"))
+                               levels = c("2 promoters", "3-5 promoters", "Unique (1 promoter)"))
   )
 
 # Stacked bar plot showing promoter category distribution
@@ -217,22 +217,41 @@ ggplot(plot_data_detailed, aes(x = crispr_label, fill = promoter_category)) +
   ) +
   theme_minimal()
 
-# Box plot of number of promoters per transcript
-plot_data_for_boxplot <- comparison_data %>%
-  filter(has_coordinate_data) %>%
-  mutate(crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR"))
+# Create data for plotting coordinate coverage
+coordinate_plot_data <- comparison_data %>%
+  mutate(
+    crispr_label = ifelse(crispr_status == "CRISPR_covered", "CRISPR Covered", "Non-CRISPR"),
+    coordinate_status = ifelse(has_coordinate_data, "Has Coordinates", "No Coordinates")
+  )
 
-ggplot(plot_data_for_boxplot, aes(x = crispr_label, y = n_promoters, fill = crispr_label)) +
-  geom_boxplot(alpha = 0.7) +
-  scale_fill_manual(values = c("CRISPR Covered" = "lightblue", "Non-CRISPR" = "lightcoral")) +
+# Stacked bar plot of coordinate data availability
+ggplot(coordinate_plot_data, aes(x = crispr_label, fill = coordinate_status)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = c("Has Coordinates" = "lightgreen", "No Coordinates" = "lightgray")) +
   labs(
-    title = "Number of Promoters per Transcript",
+    title = "Coordinate Data Availability: CRISPR-Covered vs Non-CRISPR Transcripts",
     x = "CRISPR Coverage Status",
-    y = "Number of Promoters",
-    fill = "Group"
+    y = "Proportion",
+    fill = "Coordinate Status"
   ) +
   theme_minimal() +
-  theme(legend.position = "none")
+  scale_y_continuous(labels = scales::percent_format()) +
+  geom_text(stat = "count", aes(label = after_stat(count)), 
+            position = position_fill(vjust = 0.5), color = "black")
+
+# Count plot of coordinate data availability
+ggplot(coordinate_plot_data, aes(x = crispr_label, fill = coordinate_status)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = c("Has Coordinates" = "lightgreen", "No Coordinates" = "lightgray")) +
+  labs(
+    title = "Count of Transcripts by Coordinate Data Availability and CRISPR Coverage",
+    x = "CRISPR Coverage Status",
+    y = "Number of Transcripts",
+    fill = "Coordinate Status"
+  ) +
+  theme_minimal() +
+  geom_text(stat = "count", aes(label = after_stat(count)), 
+            position = position_dodge(width = 0.9), vjust = -0.25)
 
 # Save detailed results
 write.csv(comparison_data, "unique_promoters/transcripts_promoter_detailed_analysis.csv", row.names = FALSE)
