@@ -51,6 +51,7 @@ This is based on previous work by Stephen Ostrowski.
    * Use BiomartR to get their exon coordinates
    * Import Depmap AvanaGuide Crispr data
    * Determine which transcripts were targeted in Crispr screen, and find `read_counts`
+   * Export `guide_effect/...transcript_guide_counts.csv` to show # of guides targeting each transcript
    * From `read_counts`, calculate guide effect (see below for how to calculate)
    * Export guide_effect results
 5. `analyze_effects.R`

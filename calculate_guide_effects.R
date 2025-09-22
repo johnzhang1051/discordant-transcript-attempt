@@ -4,36 +4,21 @@ library(tidyverse)
 library(dplyr)
 library(GenomicRanges)
 
-####################### Load transcript lists
-discordant_transcripts <- readr::read_csv(
-  file=file.path("correlation_results", "discordant_transcripts.csv")
-)
-colnames(discordant_transcripts)[1] <- "transcript_id"
+####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
+# Modify these two lines to switch between different transcript lists:
+transcript_list_file <- "correlation_results/discordant_transcripts.csv"  # Change this path
+transcript_list_name <- "discordant_transcripts"  # Change this name
 
+# Load the chosen transcript list
+transcript_list <- readr::read_csv(file = transcript_list_file)
+colnames(transcript_list)[1] <- "transcript_id"
 
-correlated_transcripts <- readr::read_csv(
-  file=file.path("correlation_results", "MITF_transcript_correlations_filtered.csv")
-)
+# Remove version numbers if present
+transcript_list$transcript_id_clean <- sub("\\..*", "", transcript_list$transcript_id)
 
-
-# Remove version numbers if present (e.g., "ENST00000394351.9" -> "ENST00000394351")
-discordant_transcripts$transcript_id_clean <- sub("\\..*", "", discordant_transcripts$transcript_id)
-correlated_transcripts$transcript_id_clean <- sub("\\..*", "", correlated_transcripts$transcript_id)
-
-####### EDIT THIS
-transcript_list <- discordant_transcripts
-#transcript_list <- "correlated_transcripts"
-
-transcript_list_name <- "discordant_transcripts"
-#transcript_list_name <- "correlated_transcripts"
-
-
+cat("Analyzing", nrow(transcript_list), transcript_list_name, "transcripts\n")
 
 #######################  Query biomaRt for your transcripts
-#if (!requireNamespace("BiocManager", quietly = TRUE))
-#  install.packages("BiocManager")
-#BiocManager::install("biomaRt")
-
 library(biomaRt)
 
 ensembl_data <- useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
@@ -95,13 +80,8 @@ results <- auto_biomart_query(
 # export Biomart data
 write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
 
-
 #######################  Get exon-level dataframe
 exon_locations <- results$structure
-
-exon_locations <- readr::read_csv(
-  file=paste0("guide_effect/", transcript_list_name, "_exon_locations.csv")
-)
 
 #######################  Map Depmap Guides to Transcripts
 
@@ -181,15 +161,69 @@ overlaps <- data.frame(
 # export overlaps data because it takes a while to run
 write.csv(overlaps, paste0("guide_effect/", transcript_list_name, "_exon_guide_overlaps.csv"), row.names = FALSE)
 
+###################### TRANSCRIPT-LEVEL GUIDE COUNTS
+
+# Count how many guides target each transcript
+transcript_guide_counts <- overlaps %>%
+  group_by(exon_data.ensembl_transcript_id) %>%
+  summarise(
+    gene_name = dplyr::first(exon_data.external_gene_name),
+    n_guides_targeting = n_distinct(guide_data.sgRNA),
+    n_exons_targeted = n_distinct(exon_data.ensembl_exon_id),
+    guide_list = paste(unique(guide_data.sgRNA), collapse = ";"),
+    .groups = "drop"
+  ) %>%
+  rename(transcript_id = exon_data.ensembl_transcript_id)
+
+# Get transcripts with guides vs without guides
+transcripts_with_guides <- unique(overlaps$exon_data.ensembl_transcript_id)
+transcripts_without_guides <- transcript_list %>%
+  filter(!transcript_id_clean %in% transcripts_with_guides) %>%
+  select(transcript_id = transcript_id_clean) %>%
+  mutate(
+    gene_name = NA,
+    n_guides_targeting = 0,
+    n_exons_targeted = 0,
+    guide_list = ""
+  )
+
+# Combine to get complete transcript guide summary
+transcript_guide_summary <- bind_rows(
+  transcript_guide_counts,
+  transcripts_without_guides
+)
+
+# Export transcript-level guide counts
+write.csv(transcript_guide_summary, 
+          paste0("guide_effect/", transcript_list_name, "_transcript_guide_counts.csv"), 
+          row.names = FALSE)
+
+###################### GUIDE-LEVEL ANALYSIS
+
+# Create guide-level dataframe showing which transcripts each guide targets
+guide_level_analysis <- overlaps %>%
+  group_by(guide_data.sgRNA) %>%
+  summarise(
+    n_transcripts_targeted = n_distinct(exon_data.ensembl_transcript_id),
+    n_genes_targeted = n_distinct(exon_data.external_gene_name),
+    n_exons_hit = n(),
+    transcript_list = paste(unique(exon_data.ensembl_transcript_id), collapse = ";"),
+    gene_list = paste(unique(exon_data.external_gene_name), collapse = ";"),
+    chromosomes = paste(unique(exon_data.chromosome_name), collapse = ";"),
+    .groups = "drop"
+  ) %>%
+  rename(sgRNA = guide_data.sgRNA)
+
+# Export guide-level analysis
+write.csv(guide_level_analysis, 
+          paste0("guide_effect/", transcript_list_name, "_guide_level_analysis.csv"), 
+          row.names = FALSE)
 
 ###################### Look at non-overlaps
-
-transcripts_with_guides <- unique(overlaps$exon_data.ensembl_transcript_id)
 non_overlaps <- transcript_list %>%
   filter(!transcript_id_clean %in% transcripts_with_guides)
 
 write.csv(non_overlaps, paste0("guide_effect/", transcript_list_name, "_non_overlaps.csv"), row.names = FALSE)
-
 
 #######################  Correlate Guide Effect to Transcripts
 
@@ -250,7 +284,7 @@ transcript_aggregated_effects <- transcript_guide_effects %>%
   group_by(exon_data.ensembl_transcript_id) %>%
   summarise(
     gene_name = dplyr::first(exon_data.external_gene_name),
-    n_guides = n(),
+    n_guides = n_distinct(guide_data.sgRNA),
     mean_guide_effect = mean(mean_guide_effect, na.rm = TRUE),
     median_guide_effect = median(mean_guide_effect, na.rm = TRUE),
     sd_guide_effect = sd(mean_guide_effect, na.rm = TRUE),
@@ -263,11 +297,23 @@ transcript_aggregated_effects <- transcript_guide_effects %>%
 # export final results
 write.csv(transcript_aggregated_effects,paste0("guide_effect/", transcript_list_name, "_guide_effects.csv"), row.names = FALSE)
 
+###################### Graphs
 
 library(ggplot2)
 
-# Create boxplot of guide effects
-guide_effects_plot <- ggplot(transcript_aggregated_effects, aes(x = "All Transcripts", y = mean_guide_effect)) +
+# 1. Distribution of number of guides per transcript
+ggplot(transcript_guide_summary, aes(x = n_guides_targeting)) +
+  geom_histogram(binwidth = 1, fill = "lightblue", color = "black", alpha = 0.7) +
+  labs(
+    title = paste("Distribution of Guide Counts per", str_to_title(transcript_list_name), "Transcript"),
+    x = "Number of Guides Targeting Transcript",
+    y = "Number of Transcripts",
+    subtitle = paste("Total transcripts:", nrow(transcript_guide_summary))
+  ) +
+  theme_minimal()
+
+# 2. Original guide effects boxplot
+ggplot(transcript_aggregated_effects, aes(x = "All Transcripts", y = mean_guide_effect)) +
   geom_boxplot(fill = "lightblue", alpha = 0.7) +
   geom_jitter(width = 0.2, alpha = 0.5, size = 1) +
   labs(
@@ -283,5 +329,13 @@ guide_effects_plot <- ggplot(transcript_aggregated_effects, aes(x = "All Transcr
   ) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.7)
 
-# Display the plot
-print(guide_effects_plot)
+# 3. Guide specificity plot - how many transcripts does each guide target?
+ggplot(guide_level_analysis, aes(x = n_transcripts_targeted)) +
+  geom_histogram(binwidth = 1, fill = "lightcoral", color = "black", alpha = 0.7) +
+  labs(
+    title = "Guide Specificity Distribution",
+    x = "Number of Transcripts Targeted per Guide",
+    y = "Number of Guides",
+    subtitle = paste("Total guides:", nrow(guide_level_analysis))
+  ) +
+  theme_minimal()
