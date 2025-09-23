@@ -225,14 +225,25 @@ cocor_results <- purrr::pmap_dfr(
 cocor_results <- cocor_results %>%
   mutate(FDR = p.adjust(p_value, method = "BH"))
 
+colnames(cocor_results)[1] <- "transcript_id"
+
 # Identify discordant transcripts
+MITF_transcript_correlations$transcript_id <- sub("\\..*", "", sub("^[.]*", "", MITF_transcript_correlations$transcript_id))
+
 discordant_transcripts <- cocor_results %>%
   filter(!is.na(FDR) & FDR < 0.05,
          !is.na(r_transcript), !is.na(r_gene),
-         r_transcript >= 0.5, r_gene < 0.5)
+         r_transcript >= 0.5, r_gene < 0.5) %>%
+  left_join(MITF_transcript_correlations, by = "transcript_id")
 
+# Identify correlated transcripts
+filtered_transcripts$transcript_id <- sub("\\..*", "", sub("^[.]*", "", filtered_transcripts$transcript_id))
 
-colnames(discordant_transcripts)[1] <- "transcript_id"
+correlated_transcripts <- filtered_transcripts %>%
+  filter(!transcript_id %in% discordant_transcripts$transcript_id) %>%
+  left_join(cocor_results, by = "transcript_id")
+
 # Save results
 write.csv(cocor_results, "correlation_results/cocor_results.csv", row.names = FALSE)
 write.csv(discordant_transcripts, "correlation_results/discordant_transcripts.csv", row.names = FALSE)
+write.csv(correlated_transcripts, "correlation_results/correlated_transcripts.csv", row.names = FALSE)

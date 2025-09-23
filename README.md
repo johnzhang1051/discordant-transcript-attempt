@@ -67,10 +67,14 @@ This is based on previous work by Stephen Ostrowski.
    * Starting with the `MITF_high_low` classifications
    * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
    * Then reports whether there were differences in guide effects
-5. `analyze_unique_promoters.R`
+6. `analyze_unique_promoters.R`
    * For list of transcripts, finds the # of promoters based on same data as resubmission
    * About ~60% of transcripts in our list don't have any promoter data on them
    * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
+7. `created_annotated_table.R`
+   * Create "master" list of transcripts from correlated + discordant
+   * Annotate the data + calculations we have
+   * This will probably be used as the list of transcripts we do pooled screens on
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
@@ -91,16 +95,10 @@ This is based on previous work by Stephen Ostrowski.
       * `(guide_effect_raw - guide_effect_median) = guide_effect_final`
    * Thus, the guide effect is normalized and centered 
 - Determined expression cut-off for MITF-high vs. low expressing cell-lines
-- I tried running the guide effect analysis while splitting MITF-high vs. low
-   * When I first tried using the median (~67) as the cutoff, guide_effects were same for high vs. low
-   * When I set cutoff to 100, then 
+- Updated cell-line data to use updated from Depmap site
+- Updated guide-effect to show # of guides targeting each transcript
+- Identified # of promoters each transcript has
 
 ## Next Steps
-* Test out MITF-high vs. low cutoff - if I filter to only MITF-high cell-lines, how do my results look? Do I have enough data points?
-* Verify that my datasets are up-to-date and correct, and that my approach is right.
-   * Is my cell-line data accurate?
-   * Is my approach for checking if signals targeting transcripts using exon-coordinates right?
-   * Is there a better way than using median to classify MITF M high vs. low?
-   * Is `guide-effect` calculation correct?
-   * What should the cutoffs be for "essential" transcripts for cell survival based on `guide-effect`?
+* Recheck accuracy of data sources and calculations
    

@@ -4,10 +4,12 @@ library(tidyverse)
 library(dplyr)
 library(GenomicRanges)
 
+conflicts_prefer(dplyr::rename)
+
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "correlation_results/discordant_transcripts.csv"  # Change this path
-transcript_list_name <- "discordant_transcripts"  # Change this name
+transcript_list_file <- "correlation_results/correlated_transcripts.csv"  # Change this path
+transcript_list_name <- "correlated_transcripts"  # Change this name
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
