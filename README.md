@@ -56,7 +56,7 @@ This is based on previous work by Stephen Ostrowski.
    * Export `guide_effect/...transcript_guide_counts.csv` to show # of guides targeting each transcript
    * From `read_counts`, calculate guide effect (see below for how to calculate)
    * Export guide_effect results
-5. `analyze_effects.R`
+5. `analyze_guide_effects.R`
    * Starting with `guide_effect` data
    * List which transcripts had lowest guide_effect
    * We can conclude these are most "essential" for survival
@@ -71,10 +71,17 @@ This is based on previous work by Stephen Ostrowski.
    * For list of transcripts, finds the # of promoters based on same data as resubmission
    * About ~60% of transcripts in our list don't have any promoter data on them
    * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
-7. `created_annotated_table.R`
+7. `analyze_non_screened.R`
+   * Analyze transcripts that weren't covered in Avana screen
+   * Specifically looking into the following:
+      * Whether the transcript coordinates overlap (aren't unique)
+      * PAM site availability
+      * % of GC content
+8. `created_annotated_table.R`
    * Create "master" list of transcripts from correlated + discordant
    * Annotate the data + calculations we have
    * This will probably be used as the list of transcripts we do pooled screens on
+
 
 ## Progress/Notes
 - So far, I've gotten transcript-expression and protein-gene-expression data
@@ -101,4 +108,5 @@ This is based on previous work by Stephen Ostrowski.
 
 ## Next Steps
 * Recheck accuracy of data sources and calculations
+* Analyzing non-screened transcripts (discordant and correlated)
    

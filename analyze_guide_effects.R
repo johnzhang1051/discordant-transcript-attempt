@@ -13,7 +13,7 @@ guide_effects <- readr::read_csv(
   file = paste0("guide_effect/", transcript_list_name, "_guide_effects.csv")
 )
 
-# Load the detailed overlaps data  
+# Load the detailed overlaps data
 overlaps <- readr::read_csv(
   file = paste0("guide_effect/", transcript_list_name, "_exon_guide_overlaps.csv")
 )
