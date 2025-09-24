@@ -83,6 +83,8 @@ Biomart R Package
    * Starting with the `MITF_high_low` classifications
    * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
    * Then reports whether there were differences in guide effects
+10. `gene_ontology.R`
+   * Reports on gene ontology for given transcript list
 
 
 ## Progress/Notes

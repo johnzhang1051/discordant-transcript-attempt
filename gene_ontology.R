@@ -5,11 +5,16 @@
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(ReactomePA)
+library(ggplot2)
+library(dplyr)
+library(stringr)
 
 ####### Get Data:
 
 # Pull transcripts
-transcripts <- read.csv("guide_effect/discordant_transcripts_non_overlaps.csv")
+transcripts <- read.csv("annotated_table/annotated_transcripts_updated.csv")
+# filter to non-screened transcripts
+transcripts <- transcripts %>% filter(crispr_screened == FALSE) 
 
 ## extract to vector
 symbols <- as.character(transcripts$Gene)
@@ -31,14 +36,12 @@ gene_ontology_terms <- enrichGO(gene         = entrez$ENTREZID,
 # View top results
 head(gene_ontology_terms)
 
-library(ggplot2)
-dotplot(gene_ontology_terms, showCategory = 15) +
+go_plot <- dotplot(gene_ontology_terms, showCategory = 15) +
   ggtitle("GO Biological Processes Enriched")
-barplot(gene_ontology_terms, showCategory = 15, title = "Top GO Terms")
+
+ggsave("gene_ontology/go_process.png", go_plot, width = 10, height = 8, dpi = 300)
 
 ## genes linked to specific GO
-library(dplyr)
-library(stringr)
 # Search for the GO term (flexible search)
 go_of_interest <- gene_ontology_terms %>%
   filter(str_detect(Description, "positive regulation of receptor clustering"))
@@ -63,8 +66,10 @@ reactome_results <- enrichPathway(
 # Convert to data frame
 reactome_df <- as.data.frame(reactome_results)
 
-dotplot(reactome_results, showCategory = 15) +
+reactome_plot <- dotplot(reactome_results, showCategory = 15) +
   ggtitle("Reactome Pathways Enriched")
+
+ggsave("gene_ontology/reactome_pathways.png", reactome_plot, width = 10, height = 8, dpi = 300)
 
 
 ## KEGG Pathway
@@ -76,9 +81,10 @@ kegg_results <- enrichKEGG(gene = entrez$ENTREZID,
 
 View(kegg_results@result)
 
-dotplot(kegg_results, showCategory = 15) +
+kegg_plot <- dotplot(kegg_results, showCategory = 15) +
   ggtitle("KEGG Pathway Enrichment")
 
+ggsave("gene_ontology/kegg_pathways.png", kegg_plot, width = 10, height = 8, dpi = 300)
 
 # Filter for "MITF-M regulated melanocyte development"
 mitf_pathway <- reactome_results@result %>%
