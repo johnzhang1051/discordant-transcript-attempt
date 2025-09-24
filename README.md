@@ -25,9 +25,10 @@ This is based on previous work by Stephen Ostrowski.
   * Maps guide RNA's (Crispr) to genes and their locations 
 - ScreenSequenceMap
    * 
-- Biomart R Package
-  * Lets us search genetic attributes (eg `exon_start_position`, `transcript_id`) by filtering to specific values such as gene, transcript, or exon id's
-  * [Documentation](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
+
+Biomart R Package
+* Lets us search genetic attributes (eg `exon_start_position`, `transcript_id`) by filtering to specific values such as gene, transcript, or exon id's
+* [Documentation](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
 
 ## Analysis Flow:
 1. `clean_data.R`
@@ -63,24 +64,25 @@ This is based on previous work by Stephen Ostrowski.
    * Bc when these transcripts were screened, the cells died a lot
    * So likely these transcripts are important
    * And since we're looking at melanoma cell-lines, perhaps these transcripts are linked to melanoma
-5. `analyze_MITF_high_low.R`
-   * Starting with the `MITF_high_low` classifications
-   * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
-   * Then reports whether there were differences in guide effects
 6. `analyze_unique_promoters.R`
    * For list of transcripts, finds the # of promoters based on same data as resubmission
    * About ~60% of transcripts in our list don't have any promoter data on them
    * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
-7. `analyze_non_screened.R`
-   * Analyze transcripts that weren't covered in Avana screen
-   * Specifically looking into the following:
-      * Whether the transcript coordinates overlap (aren't unique)
-      * PAM site availability
-      * % of GC content
-8. `created_annotated_table.R`
+7. `created_annotated_table.R`
    * Create "master" list of transcripts from correlated + discordant
    * Annotate the data + calculations we have
    * This will probably be used as the list of transcripts we do pooled screens on
+8. `analyze_non_screened.R`
+   * Compare Avana screened vs. non-screened transcripts
+   * Specifically looking into the following:
+      * Whether the transcript coordinates overlap (aren't unique)
+      * Transcript length
+      * % of GC content
+   * Updates "master" table with new findings
+9. `analyze_MITF_high_low.R`
+   * Starting with the `MITF_high_low` classifications
+   * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
+   * Then reports whether there were differences in guide effects
 
 
 ## Progress/Notes
@@ -105,8 +107,7 @@ This is based on previous work by Stephen Ostrowski.
 - Updated cell-line data to use updated from Depmap site
 - Updated guide-effect to show # of guides targeting each transcript
 - Identified # of promoters each transcript has
+- Compared screened vs. non-screened for GC %, Transcript Overlaps, and Transcript Length
 
 ## Next Steps
 * Recheck accuracy of data sources and calculations
-* Analyzing non-screened transcripts (discordant and correlated)
-   

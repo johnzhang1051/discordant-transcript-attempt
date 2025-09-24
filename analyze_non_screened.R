@@ -170,6 +170,47 @@ complete_analysis <- master_table %>%
 
 write.csv(complete_analysis, "non_screened_analyses/comparison_analysis_results.csv", row.names = FALSE)
 
+####################### UPDATE MASTER TABLE
+
+# add GC % content, Transcript Length, Transcript Coordinate overlaps for each transcript
+analytical_data <- complete_analysis %>%
+  select(
+    transcript_id_clean,
+    # Coordinate data
+    chromosome_name, transcript_start, transcript_end, transcript_length,
+    n_exons, total_exon_length,
+    # Overlap data
+    n_overlapping_transcripts, n_overlapping_exons, 
+    has_coordinate_overlaps, overlap_category,
+    # GC content data
+    gene_gc_content
+  ) %>%
+  rename(
+    transcript_id = transcript_id_clean,
+    gc_content_proportion = gene_gc_content,
+    transcript_chr = chromosome_name,
+  )
+
+# Update the master table by joining with analytical data
+updated_master_table <- master_table %>%
+  left_join(analytical_data, by = c("transcript_id_clean" = "transcript_id")) %>%
+  # Organize columns logically
+  select(
+    # Original master table columns first
+    transcript_id, transcript_id_clean, transcript_classification, crispr_screened,
+    # New GC content information
+    gc_content_proportion,
+    # Any remaining original columns
+    everything(),
+    -transcript_id_clean
+  ) %>%
+  # Sort by classification and transcript_id
+  arrange(crispr_screened, desc(transcript_classification), desc(r_transcript))
+
+# Save the updated master table
+write.csv(updated_master_table, "annotated_table/annotated_transcripts_updated.csv", row.names = FALSE)
+
+
 ####################### VISUALIZATIONS
 
 # Overlap comparision between screened and non-screened
