@@ -267,6 +267,8 @@ gc_summary <- complete_analysis %>%
   )
 
 View(gc_summary)
+write.csv(gc_summary, "non_screened_analyses/gc_summary.csv", row.names = FALSE)
+
 
 ggplot(complete_analysis %>% filter(!is.na(gene_gc_content)), 
        aes(x = screening_status, y = gene_gc_content, fill = screening_status)) +
@@ -298,6 +300,7 @@ length_summary <- complete_analysis %>%
   )
 
 View(length_summary)
+write.csv(length_summary, "non_screened_analyses/length_summary.csv", row.names = FALSE)
 
 ggplot(complete_analysis %>% filter(!is.na(transcript_length)), 
        aes(x = screening_status, y = log10(transcript_length), fill = screening_status)) +
