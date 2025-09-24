@@ -14,14 +14,12 @@ conflicts_prefer(dplyr::first)
 conflicts_prefer(dplyr::rename)
 
 ####################### Load master table with crispr_screened column
-# Assuming you've already created this from your master table script
 master_table <- read_csv("annotated_table/annotated_transcripts.csv")
 
-# Filter for non-CRISPR screened transcripts
-non_crispr_transcripts <- master_table %>%
-  filter(crispr_screened == FALSE)
+# Clean transcript IDs for all transcripts (not just non-screened)
+master_table$transcript_id_clean <- sub("\\..*", "", sub("^[.]*", "", master_table$transcript_id))
 
-####################### Load existing biomaRt data from saved CSVs (no need to re-query!)
+####################### Load existing biomaRt data from saved CSVs
 # Load your previously saved biomaRt exon location data
 correlated_exon_locations <- read_csv("guide_effect/correlated_transcripts_exon_locations.csv")
 discordant_exon_locations <- read_csv("guide_effect/discordant_transcripts_exon_locations.csv")
@@ -32,17 +30,12 @@ exon_locations <- bind_rows(
   discordant_exon_locations %>% mutate(source_list = "discordant")
 )
 
-# Clean transcript IDs (following your pattern)
-non_crispr_transcripts$transcript_id_clean <- sub("\\..*", "", sub("^[.]*", "", non_crispr_transcripts$transcript_id))
-
-
-
 ####################### 1. COORDINATE OVERLAP ANALYSIS (exon-level overlaps)
 cat("1. Analyzing coordinate overlaps at exon level...\n")
 
-# Filter exon_locations to only non-CRISPR screened transcripts
+# Filter exon_locations to all transcripts in master table
 exon_data <- exon_locations %>%
-  filter(ensembl_transcript_id %in% non_crispr_transcripts$transcript_id_clean) %>%
+  filter(ensembl_transcript_id %in% master_table$transcript_id_clean) %>%
   filter(!is.na(chromosome_name), !is.na(exon_chrom_start), !is.na(exon_chrom_end))
 
 # Create GenomicRanges object for exons
@@ -105,35 +98,7 @@ transcript_coords_with_overlaps <- exon_data %>%
   )
 
 ####################### GC CONTENT ANALYSIS
-
-# Get GC content data via biomaRt (since this wasn't in original queries)
-
-# Set up biomaRt for GC content only
-ensembl_data <- useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
-
-# Get unique transcript IDs for GC query
-transcript_ids <- unique(non_crispr_transcripts$transcript_id_clean)
-
-# Query for GC content only
-gc_content_data <- tryCatch({
-  getBM(
-    attributes = c("ensembl_transcript_id", "percentage_gene_gc_content"),
-    filters = "ensembl_transcript_id",
-    values = transcript_ids,
-    mart = ensembl_data
-  )
-}, error = function(e) {
-  cat("Error getting GC content from biomaRt:", e$message, "\n")
-  data.frame(ensembl_transcript_id = transcript_ids, percentage_gene_gc_content = NA)
-})
-
-# Use the GC content data we just retrieved
-gc_analysis <- gc_content_data %>%
-  rename(gene_gc_content = percentage_gene_gc_content) %>%
-  filter(!is.na(gene_gc_content))
-
-####################### Get GC content by extracting sequences directly
-library(BSgenome.Hsapiens.UCSC.hg38)  # or hg19 if that's your reference
+library(BSgenome.Hsapiens.UCSC.hg38)
 library(Biostrings)
 
 # Filter to transcripts that have coordinate data
@@ -143,7 +108,7 @@ transcripts_with_coords <- transcript_coords_with_overlaps %>%
 if (nrow(transcripts_with_coords) > 0) {
   # Create GRanges for sequence extraction
   gr_for_gc <- GRanges(
-    seqnames = paste0("chr", transcripts_with_coords$chromosome_name),  # Add 'chr' prefix for UCSC
+    seqnames = paste0("chr", transcripts_with_coords$chromosome_name),
     ranges = IRanges(start = transcripts_with_coords$transcript_start, 
                      end = transcripts_with_coords$transcript_end),
     transcript_id = transcripts_with_coords$ensembl_transcript_id
@@ -171,7 +136,7 @@ if (nrow(transcripts_with_coords) > 0) {
     # Create GC analysis dataframe
     gc_analysis <- data.frame(
       ensembl_transcript_id = transcripts_with_coords$ensembl_transcript_id,
-      gene_gc_content = as.numeric(gc_content_values),  # Convert to percentage
+      gene_gc_content = as.numeric(gc_content_values),
       stringsAsFactors = FALSE
     )
   } else {
@@ -191,65 +156,162 @@ if (nrow(transcripts_with_coords) > 0) {
   cat("No transcripts with coordinate data for GC analysis\n")
 }
 
-####################### PAM SITE ANALYSIS (PLACEHOLDER FOR FUTURE)
-
-# TODO: Implement PAM site analysis using DepMap guide data
-# Potential approaches:
-# - Use AvanaGuideMap.csv to analyze actual guide sequences and PAM sites
-# - Calculate guide density per transcript from existing overlap data
-# - Analyze guide efficiency scores if available in DepMap data
-
 ####################### COMBINE ALL ANALYSES
-cat("4. Combining all technical analyses...\n")
-
-# Merge all analyses
-complete_analysis <- non_crispr_transcripts %>%
+# Merge all analyses - now comparing by screening status instead of correlated/discordant
+complete_analysis <- master_table %>%
   # Join with coordinate/overlap analysis
   left_join(transcript_coords_with_overlaps, by = c("transcript_id_clean" = "ensembl_transcript_id")) %>%
   # Join with GC analysis
-  left_join(gc_analysis, by = c("transcript_id_clean" = "ensembl_transcript_id"))
+  left_join(gc_analysis, by = c("transcript_id_clean" = "ensembl_transcript_id")) %>%
+  # Create screening status labels
+  mutate(
+    screening_status = ifelse(crispr_screened, "CRISPR Screened", "Non-CRISPR Screened")
+  )
 
+write.csv(complete_analysis, "non_screened_analyses/comparison_analysis_results.csv", row.names = FALSE)
 
 ####################### VISUALIZATIONS
 
-# Coordinate overlap distribution
-complete_analysis %>%
-  ggplot(aes(x = overlap_category, fill = transcript_classification)) +
-  geom_bar(position = "dodge") +
+# Overlap comparision between screened and non-screened
+overlap_comparison <- complete_analysis %>%
+  filter(!is.na(overlap_category)) %>%
+  count(screening_status, overlap_category) %>%
+  group_by(screening_status) %>%
+  mutate(
+    total = sum(n),
+    percentage = n / total
+  ) %>%
+  select(screening_status, overlap_category, n, percentage) %>%
+  arrange(screening_status, overlap_category)
+
+overlap_table <- overlap_comparison %>%
+  select(screening_status, overlap_category, percentage) %>%
+  pivot_wider(names_from = screening_status, values_from = percentage, values_fill = 0)
+
+View(overlap_table)
+write.csv(overlap_table, "non_screened_analyses/overlap_compare_table.csv", row.names = FALSE)
+
+overlap_plot <- complete_analysis %>%
+  filter(!is.na(overlap_category)) %>%
+  count(screening_status, overlap_category) %>%
+  group_by(screening_status) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = screening_status, y = percentage, fill = overlap_category)) +
+  geom_col(position = "stack") +
+  geom_text(aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")), 
+            position = position_stack(vjust = 0.5), size = 3, color = "white") +
   labs(
-    title = "Coordinate Overlap Patterns in Non-CRISPR Screened Transcripts",
-    x = "Overlap Category", 
-    y = "Number of Transcripts",
-    fill = "Transcript Classification"
+    title = "Overlap Distribution: Screened vs Non-Screened Transcripts",
+    x = "Screening Status",
+    y = "Percentage of Transcripts",
+    fill = "Overlap Category"
   ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  scale_y_continuous(labels = function(x) paste0(x, "%"))
 
-# GC content distribution
+print(overlap_plot)
+
+# Comparing GC % content
+gc_summary <- complete_analysis %>%
+  filter(!is.na(gene_gc_content)) %>%
+  group_by(screening_status) %>%
+  summarise(
+    count = n(),
+    mean_gc = round(mean(gene_gc_content), 3),
+    median_gc = round(median(gene_gc_content), 3),
+    sd_gc = round(sd(gene_gc_content), 3),
+    extreme_low_pct = round(mean(gene_gc_content < 0.20) * 100, 1),
+    extreme_high_pct = round(mean(gene_gc_content > 0.80) * 100, 1),
+    .groups = 'drop'
+  )
+
+View(gc_summary)
+
+ggplot(complete_analysis %>% filter(!is.na(gene_gc_content)), 
+       aes(x = screening_status, y = gene_gc_content, fill = screening_status)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 0.5) +
+  geom_hline(yintercept = c(0.20, 0.80), linetype = "dashed", color = "red") +
+  labs(
+    title = "GC Content Comparison: Screened vs Non-Screened",
+    x = "Screening Status",
+    y = "GC Content (proportion)",
+    fill = "Screening Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# Transcript length comparison
+length_summary <- complete_analysis %>%
+  filter(!is.na(transcript_length)) %>%
+  group_by(screening_status) %>%
+  summarise(
+    count = n(),
+    mean_length = round(mean(transcript_length)),
+    median_length = round(median(transcript_length)),
+    sd_length = round(sd(transcript_length)),
+    min_length = min(transcript_length),
+    max_length = max(transcript_length),
+    .groups = 'drop'
+  )
+
+View(length_summary)
+
+ggplot(complete_analysis %>% filter(!is.na(transcript_length)), 
+       aes(x = screening_status, y = log10(transcript_length), fill = screening_status)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 0.5) +
+  labs(
+    title = "Transcript Length Comparison: Screened vs Non-Screened",
+    x = "Screening Status",
+    y = "Log10(Transcript Length)",
+    fill = "Screening Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# Test GC content difference
 if (nrow(gc_analysis) > 0 && sum(!is.na(complete_analysis$gene_gc_content)) > 0) {
-  ggplot(complete_analysis %>% filter(!is.na(gene_gc_content)), 
-               aes(x = gene_gc_content, fill = transcript_classification)) +
-    geom_histogram(bins = 30, alpha = 0.7) +
-    geom_vline(xintercept = c(.20, .80), linetype = "dashed", color = "red") +
-    labs(
-      title = "GC Content Distribution in Non-CRISPR Screened Transcripts",
-      x = "Gene GC Content (%)",
-      y = "Number of Transcripts",
-      fill = "Transcript Classification"
-    ) +
-    theme_minimal()
-} else {
-  cat("No GC content data available for plotting\n")
+  gc_screened <- complete_analysis %>% filter(screening_status == "CRISPR Screened", !is.na(gene_gc_content)) %>% pull(gene_gc_content)
+  gc_nonscreened <- complete_analysis %>% filter(screening_status == "Non-CRISPR Screened", !is.na(gene_gc_content)) %>% pull(gene_gc_content)
+  
+  if (length(gc_screened) > 0 && length(gc_nonscreened) > 0) {
+    gc_test <- wilcox.test(gc_screened, gc_nonscreened)
+    cat("GC Content Wilcoxon test p-value:", format(gc_test$p.value, scientific = TRUE), "\n")
+  }
 }
 
-# Transcript length distribution by classification
-complete_analysis %>%
-  ggplot(aes(x = log10(transcript_length), fill = transcript_classification)) +
-  geom_histogram(bins = 30, alpha = 0.7) +
-  labs(
-    title = "Transcript Length Distribution in Non-CRISPR Screened Transcripts",
-    x = "Log10(Transcript Length)",
-    y = "Number of Transcripts", 
-    fill = "Transcript Classification"
-  ) +
-  theme_minimal()
+# Test transcript length difference
+length_screened <- complete_analysis %>% filter(screening_status == "CRISPR Screened", !is.na(transcript_length)) %>% pull(transcript_length)
+length_nonscreened <- complete_analysis %>% filter(screening_status == "Non-CRISPR Screened", !is.na(transcript_length)) %>% pull(transcript_length)
+
+if (length(length_screened) > 0 && length(length_nonscreened) > 0) {
+  length_test <- wilcox.test(length_screened, length_nonscreened)
+  cat("Transcript Length Wilcoxon test p-value:", format(length_test$p.value, scientific = TRUE), "\n")
+}
+
+
+####################### STATISTICAL TESTS
+# Test GC content difference
+if (nrow(gc_analysis) > 0 && sum(!is.na(complete_analysis$gene_gc_content)) > 0) {
+  gc_screened <- complete_analysis %>% filter(screening_status == "CRISPR Screened", !is.na(gene_gc_content)) %>% pull(gene_gc_content)
+  gc_nonscreened <- complete_analysis %>% filter(screening_status == "Non-CRISPR Screened", !is.na(gene_gc_content)) %>% pull(gene_gc_content)
+  
+  if (length(gc_screened) > 0 && length(gc_nonscreened) > 0) {
+    gc_ttest <- t.test(gc_screened, gc_nonscreened)
+    cat("GC Content t-test p-value:", format(gc_ttest$p.value, scientific = TRUE), "\n")
+    cat("GC Content mean difference:", round(mean(gc_screened) - mean(gc_nonscreened), 4), "\n")
+  }
+}
+
+# Test transcript length difference
+length_screened <- complete_analysis %>% filter(screening_status == "CRISPR Screened", !is.na(transcript_length)) %>% pull(transcript_length)
+length_nonscreened <- complete_analysis %>% filter(screening_status == "Non-CRISPR Screened", !is.na(transcript_length)) %>% pull(transcript_length)
+
+if (length(length_screened) > 0 && length(length_nonscreened) > 0) {
+  length_ttest <- t.test(length_screened, length_nonscreened)
+  cat("Transcript Length t-test p-value:", format(length_ttest$p.value, scientific = TRUE), "\n")
+  cat("Transcript Length mean difference:", round(mean(length_screened) - mean(length_nonscreened)), "bp\n")
+}
