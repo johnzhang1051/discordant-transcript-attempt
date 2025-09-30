@@ -51,13 +51,13 @@ sox10_lfc <- avana_logfold_change %>%
 # Join with cell line metadata
 sox10_effects <- sox10_lfc %>%
   left_join(screen_sequence_map, by = "SequenceID") %>%
-  left_join(cell_info, by = "ModelID") %>%
-  filter(!is.na(OncotreeLineage))  # Remove any without cancer type info
+  left_join(cell_info, by = "ModelID")
+  #filter(!is.na(OncotreeLineage))  # Remove any without cancer type info
 
 ####################### DEFINE MELANOMA CELL LINES
 
 # Filter to melanoma types (excluding uveal, acral, mucosal)
-melanoma_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
+melanoma_subtypes <- c("Melanoma", "Cutaneous Melanoma")
 sox10_effects <- sox10_effects %>%
   mutate(is_melanoma = OncotreeSubtype %in% melanoma_subtypes)
 
@@ -65,7 +65,7 @@ sox10_effects <- sox10_effects %>%
 
 # Aggregate effects by guide and cancer lineage
 sox10_summary <- sox10_effects %>%
-  group_by(sgRNA, OncotreePrimaryDisease, is_melanoma) %>%
+  group_by(sgRNA, OncotreePrimaryDisease) %>%
   summarise(
     mean_lfc = mean(log_fold_change, na.rm = TRUE),
     median_lfc = median(log_fold_change, na.rm = TRUE),
@@ -74,21 +74,10 @@ sox10_summary <- sox10_effects %>%
     .groups = "drop"
   )
 
-####################### PLOT 1: SOX10 Guide Effects by Cancer Type
-
-# First, summarize by OncotreePrimaryDisease instead of OncotreeLineage
-sox10_primary_summary <- sox10_effects %>%
-  group_by(sgRNA, OncotreePrimaryDisease, is_melanoma) %>%
-  summarise(
-    mean_lfc = mean(log_fold_change, na.rm = TRUE),
-    median_lfc = median(log_fold_change, na.rm = TRUE),
-    sd_lfc = sd(log_fold_change, na.rm = TRUE),
-    n_cell_lines = n(),
-    .groups = "drop"
-  )
+####################### PLOT: SOX10 Guide Effects by Cancer Type
 
 # Get the top 25 cancer types with lowest (most negative) mean LFC
-top_25_cancers <- sox10_primary_summary %>%
+top_25_cancers <- sox10_summary %>%
   group_by(OncotreePrimaryDisease) %>%
   summarise(overall_mean_lfc = mean(mean_lfc, na.rm = TRUE)) %>%
   arrange(overall_mean_lfc) %>%
@@ -97,7 +86,8 @@ top_25_cancers <- sox10_primary_summary %>%
 
 # Filter to only these top 25
 sox10_primary_filtered <- sox10_primary_summary %>%
-  filter(OncotreePrimaryDisease %in% top_25_cancers)
+  filter(OncotreePrimaryDisease %in% top_25_cancers)%>%
+  filter(!is.na(OncotreePrimaryDisease), !is.na(mean_lfc))
 
 # Create color palette - check if "Melanoma" is in the filtered data
 melanoma_present <- "Melanoma" %in% top_25_cancers
@@ -118,13 +108,11 @@ ggplot(sox10_primary_filtered, aes(x = reorder(OncotreePrimaryDisease, -mean_lfc
                                    fill = OncotreePrimaryDisease)) +
   geom_boxplot(alpha = 0.7) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
-  geom_hline(yintercept = -0.5, linetype = "dashed", color = "darkred", alpha = 0.5) +
   labs(
-    title = "SOX10 Guide Effects Across Cancer Types (Top 25 Most Depleted)",
-    subtitle = "Lower values = more cell death (essential gene)",
+    title = "SOX10 Guide Effects Across Cancer Types (Top 25 Most Negative)",
+    subtitle = "Lower values = more cell death (more essential)",
     x = "Cancer Type",
     y = "Mean Log2 Fold Change",
-    caption = "Dashed lines: 0 (neutral), -0.5 (typical essentiality threshold)"
   ) +
   theme_minimal() +
   theme(
@@ -152,7 +140,7 @@ ggplot(sox10_melanoma_comparison, aes(x = sgRNA, y = mean_lfc, fill = cancer_gro
   labs(
     title = "SOX10 Guide Effects: Melanoma vs Other Cancers",
     subtitle = "Each bar represents mean effect across cell lines",
-    x = "Guide RNA",
+    x = "sgRNA",
     y = "Mean Log2 Fold Change",
     fill = "Cancer Type"
   ) +
@@ -163,7 +151,7 @@ ggplot(sox10_melanoma_comparison, aes(x = sgRNA, y = mean_lfc, fill = cancer_gro
   ) +
   scale_fill_manual(values = c("Melanoma" = "red", "Other Cancers" = "gray70"))
 
-####################### STATISTICAL SUMMARY
+####################### STATISTICAL SIGNIFICANCE
 
 # Calculate mean effect in melanoma vs others
 melanoma_stats <- sox10_effects %>%

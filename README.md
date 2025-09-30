@@ -50,40 +50,31 @@ Biomart R Package
    * NOTE: I'm thinking of using the MITF high/low and filtering to only MITF high for this code
       * But I'm not sure if we'll have enough data. I'll try it first to see.
 4. `calculate_guide_effects.R`
-   * Starting with discordant or correlated transcript list
-   * Use BiomartR to get their exon coordinates
-   * Import Depmap AvanaGuide Crispr data
-   * Determine which transcripts were targeted in Crispr screen, and find `read_counts`
-   * Export `guide_effect/...transcript_guide_counts.csv` to show # of guides targeting each transcript
-   * From `read_counts`, calculate guide effect (see below for how to calculate)
-   * Export guide_effect results
-5. `analyze_guide_effects.R`
-   * Starting with `guide_effect` data
-   * List which transcripts had lowest guide_effect
-   * We can conclude these are most "essential" for survival
-   * Bc when these transcripts were screened, the cells died a lot
-   * So likely these transcripts are important
-   * And since we're looking at melanoma cell-lines, perhaps these transcripts are linked to melanoma
-6. `analyze_unique_promoters.R`
+   * Map CRISPR guides from DepMap to transcript exons using GenomicRanges, count guides per transcript
+   * Calculate guide effects (log2 fold change) separately for melanoma vs non-melanoma cell lines
+   * Compute melanoma specificity scores (difference, selectivity index, z-score)
+   * Identify transcripts selectively lethal in melanoma (high specificity, essential in melanoma)
+   * Export results to guide_effect/{transcript_list}_melanoma_vs_nonmelanoma.csv
+5. `analyze_unique_promoters.R`
    * For list of transcripts, finds the # of promoters based on same data as resubmission
    * About ~60% of transcripts in our list don't have any promoter data on them
    * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
-7. `created_annotated_table.R`
+6. `created_annotated_table.R`
    * Create "master" list of transcripts from correlated + discordant
    * Annotate the data + calculations we have
    * This will probably be used as the list of transcripts we do pooled screens on
-8. `analyze_non_screened.R`
+7. `analyze_non_screened.R`
    * Compare Avana screened vs. non-screened transcripts
    * Specifically looking into the following:
       * Whether the transcript coordinates overlap (aren't unique)
       * Transcript length
       * % of GC content
    * Updates "master" table with new findings
-9. `analyze_MITF_high_low.R`
+8. `analyze_MITF_high_low.R`
    * Starting with the `MITF_high_low` classifications
    * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
    * Then reports whether there were differences in guide effects
-10. `gene_ontology.R`
+9. `gene_ontology.R`
 * Reports on gene ontology for given transcript list
 
 
@@ -110,6 +101,7 @@ Biomart R Package
 - Updated guide-effect to show # of guides targeting each transcript
 - Identified # of promoters each transcript has
 - Compared screened vs. non-screened for GC %, Transcript Overlaps, and Transcript Length
+- Analyzed SOX10 guides, found that guide effect was much stronger (negative) for melanoma cell-lines
 
 ## Next Steps
-* Recheck accuracy of data sources and calculations
+- Looking at guides that target discordant transcripts, see guide effects on Melanoma vs. Non-Melanoma cell-lines
