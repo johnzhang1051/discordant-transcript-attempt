@@ -335,12 +335,12 @@ write.csv(transcript_stats,
 ###################### Graphs
 
 # Scatter plot with interesting transcripts highlighted
-ggplot(transcript_comparison,
-       aes(x = guide_effect_non_melanoma, 
-           y = guide_effect_melanoma,
+ggplot(transcript_stats,
+       aes(x = mean_non_melanoma, 
+           y = mean_melanoma,
            size = n_guides)) +
   geom_point(alpha = 0.5, shape = 21, fill = "gray80", color = "gray60", stroke = 0.3) +  # Non-interesting: gray
-  geom_point(data = filter(transcript_comparison, is_interesting),
+  geom_point(data = filter(transcript_stats, is_interesting),
              alpha = 0.7, shape = 21, 
              aes(fill = fdr),
              color = "black", stroke = 0.3) +  # Interesting: colored by FDR with black border
@@ -348,7 +348,7 @@ ggplot(transcript_comparison,
   geom_hline(yintercept = -0.5, linetype = "dashed", color = "gray30", alpha = 0.5) +
   geom_vline(xintercept = -0.5, linetype = "dashed", color = "gray30", alpha = 0.5) +
   ggrepel::geom_text_repel(
-    data = filter(transcript_comparison, is_interesting),
+    data = filter(transcript_stats, is_interesting),
     aes(label = transcript_id),
     size = 3,
     max.overlaps = 15,
