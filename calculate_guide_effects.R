@@ -3,6 +3,7 @@ library(tidyverse)
 library(dplyr)
 library(GenomicRanges)
 library(ggplot2)
+library(conflicted)
 
 conflicts_prefer(dplyr::rename)
 conflicts_prefer(dplyr::first)
@@ -108,12 +109,9 @@ avana_guide_map <- avana_guide_map %>%
   mutate(
     chromosome = gsub("chr", "", chromosome),
     guide_coordinate = as.integer(guide_coordinate),
-    guide_strand = case_when(
-      guide_strand == "+" ~ 1,
-      guide_strand == "-" ~ -1,
-      TRUE ~ NA_real_
-    )
-  )
+    strand_char = guide_strand
+  ) %>%
+  dplyr::select(-guide_strand)  # Remove original strand column
 
 # Use GenomicRanges library to find overlaps between exon and guide coordinates for same chromosomes
 library(GenomicRanges)
@@ -136,15 +134,6 @@ exon_gr <- makeGRangesFromDataFrame(
   keep.extra.columns = TRUE
 )
 
-# Fix guide data similarly
-avana_guide_map <- avana_guide_map %>%
-  mutate(strand_char = case_when(
-    guide_strand == 1 ~ "+",
-    guide_strand == -1 ~ "-", 
-    TRUE ~ "*"
-  )) %>%
-  dplyr::select(-guide_strand)  # Remove original strand column
-
 guide_gr <- makeGRangesFromDataFrame(
   avana_guide_map,
   seqnames.field = "chromosome",
@@ -155,7 +144,7 @@ guide_gr <- makeGRangesFromDataFrame(
 )
 
 # Find overlaps
-overlap_hits <- findOverlaps(guide_gr, exon_gr, ignore.strand = TRUE)  # Added ignore.strand
+overlap_hits <- findOverlaps(guide_gr, exon_gr, ignore.strand = TRUE) #ignoring strand because shouldn't matter for Crispr
 
 # Extract overlapping data
 overlaps <- data.frame(
@@ -224,12 +213,6 @@ write.csv(guide_level_analysis,
           paste0("guide_effect/", transcript_list_name, "_guide_level_analysis.csv"), 
           row.names = FALSE)
 
-###################### Look at non-overlaps
-non_overlaps <- transcript_list %>%
-  filter(!transcript_id_clean %in% transcripts_with_guides)
-
-write.csv(non_overlaps, paste0("guide_effect/", transcript_list_name, "_non_overlaps.csv"), row.names = FALSE)
-
 #######################  Correlate Guide Effect to Transcripts - SPLIT BY MELANOMA VS NON-MELANOMA
 
 # Pull in guide effect data from Depmap
@@ -248,9 +231,8 @@ cell_info <- read.csv("depmap-data/Model.csv")
 # Define melanoma types
 melanoma_subtypes <- c("Melanoma", "Cutaneous Melanoma")
 
-# Filter to only guides that target our transcripts FIRST
+# Filter to only guides that target our transcripts
 guides_of_interest <- unique(overlaps$guide_data.sgRNA)
-
 
 # Only pivot the guides we care about
 filtered_lfc <- avana_logfold_change %>%
@@ -277,86 +259,76 @@ transcript_guide_effects <- overlaps %>%
   # Remove duplicate guide-transcript-cell line combinations
   distinct(exon_data.ensembl_transcript_id, guide_data.sgRNA, SequenceID, .keep_all = TRUE)
 
-# Aggregate by transcript and cancer type
-transcript_effects_by_cancer <- transcript_guide_effects %>%
-  group_by(exon_data.ensembl_transcript_id, is_melanoma) %>%
+###################### STATISTICAL TESTING FOR MELANOMA SPECIFICITY
+
+# Perform t-tests for each transcript
+transcript_stats <- transcript_guide_effects %>%
+  group_by(exon_data.ensembl_transcript_id) %>%
   summarise(
     gene_name = first(exon_data.external_gene_name),
     n_guides = n_distinct(guide_data.sgRNA),
-    mean_lfc = mean(log_fold_change, na.rm = TRUE),
-    median_lfc = median(log_fold_change, na.rm = TRUE),
-    sd_lfc = sd(log_fold_change, na.rm = TRUE),
-    n_cell_lines = n(),
-    .groups = "drop"
-  )
-
-# Separate melanoma vs non-melanoma
-melanoma_effects <- transcript_effects_by_cancer %>%
-  filter(is_melanoma) %>%
-  select(transcript_id = exon_data.ensembl_transcript_id,
-         gene_name,
-         n_guides,
-         guide_effect_melanoma = mean_lfc,
-         melanoma_median = median_lfc,
-         melanoma_n_cell_lines = n_cell_lines)
-
-non_melanoma_effects <- transcript_effects_by_cancer %>%
-  filter(!is_melanoma) %>%
-  select(transcript_id = exon_data.ensembl_transcript_id,
-         guide_effect_non_melanoma = mean_lfc,
-         non_melanoma_median = median_lfc,
-         non_melanoma_n_cell_lines = n_cell_lines)
-
-# Combine
-transcript_comparison <- melanoma_effects %>%
-  left_join(non_melanoma_effects, by = "transcript_id") %>%
-  mutate(
-    difference = guide_effect_melanoma - guide_effect_non_melanoma
-  ) %>%
-  arrange(difference)
-
-###### Try to score the differences to identify interesting transcripts
-
-transcript_comparison <- transcript_comparison %>%
-  mutate(
-    # Z-score style - how many SDs is melanoma from non-melanoma
-    # Negative = melanoma-specific
-    melanoma_specificity_zscore = (guide_effect_melanoma - guide_effect_non_melanoma) / 
-      sqrt(melanoma_median^2 + non_melanoma_median^2 + 0.01),
+    n_melanoma_obs = sum(is_melanoma == TRUE),
+    n_non_melanoma_obs = sum(is_melanoma == FALSE),
     
-    # Selectivity index (drug-like metric)
-    # Positive = melanoma-specific
-    selectivity_index = (guide_effect_non_melanoma - guide_effect_melanoma) / 
-      (abs(guide_effect_non_melanoma) + abs(guide_effect_melanoma) + 0.01),
-  )
-
-# Z-Score < 1st quartile
-# Selectivity > 3rd quartile
-# Guide Effect < Median
-zscore_q1 <- quantile(transcript_comparison$melanoma_specificity_zscore, 0.25, na.rm = TRUE)
-selectivity_q3 <- quantile(transcript_comparison$selectivity_index, 0.75, na.rm = TRUE)
-guide_effect_median <- median(transcript_comparison$guide_effect_melanoma, na.rm = TRUE)
-
-# Identify interesting transcripts
-interesting_transcripts <- transcript_comparison %>%
-  filter(
-    melanoma_specificity_zscore < zscore_q1  # Most negative z-scores
-    & selectivity_index > selectivity_q3          # Highest selectivity
-    & guide_effect_melanoma < guide_effect_median          # Highest selectivity
+    # Calculate means
+    mean_melanoma = mean(log_fold_change[is_melanoma == TRUE], na.rm = TRUE),
+    mean_non_melanoma = mean(log_fold_change[is_melanoma == FALSE], na.rm = TRUE),
+    median_melanoma = median(log_fold_change[is_melanoma == TRUE], na.rm = TRUE),
+    median_non_melanoma = median(log_fold_change[is_melanoma == FALSE], na.rm = TRUE),
+    
+    # T-test
+    t_test = list(tryCatch(
+      t.test(
+        log_fold_change[is_melanoma == TRUE],
+        log_fold_change[is_melanoma == FALSE]
+      ),
+      error = function(e) list(p.value = NA, statistic = NA)
+    )),
+    
+    .groups = "drop"
   ) %>%
-  arrange(desc(selectivity_index)) %>% 
-  select(transcript_id, gene_name, n_guides, 
-                                          guide_effect_melanoma, guide_effect_non_melanoma,
-                                          selectivity_index, melanoma_specificity_zscore)
+  mutate(
+    # Extract t-test results
+    p_value = sapply(t_test, function(x) x$p.value), # 
+    effect_size = mean_melanoma - mean_non_melanoma
+  ) %>%
+  select(-t_test)
 
-View(interesting_transcripts)
+# Apply FDR correction
+transcript_stats <- transcript_stats %>%
+  mutate(
+    fdr = p.adjust(p_value, method = "fdr")
+  ) %>%
+  arrange(fdr, effect_size) %>%
+  rename(
+    transcript_id = exon_data.ensembl_transcript_id)
 
-# Add a flag to transcript_comparison for plotting
-transcript_comparison <- transcript_comparison %>%
+###################### IDENTIFY INTERESTING TRANSCRIPTS
+
+# Statistical approach: FDR-corrected significance + biological thresholds
+interesting_transcripts <- transcript_stats %>%
+  filter(
+    fdr <= 0.06 &                          # Statistically significant (I made it 0.06 because there were some right on the edge)
+    effect_size <= -0.2 &                   # More essential in melanoma than non-melanoma
+    mean_melanoma <= -0.3                   # Actually essential in melanoma
+  ) %>%
+  arrange(fdr, effect_size) %>%
+  select(transcript_id, gene_name, n_guides,
+         mean_melanoma, mean_non_melanoma,
+         effect_size, p_value, fdr)
+
+print(interesting_transcripts)
+
+transcript_stats <- transcript_stats %>%
   mutate(is_interesting = transcript_id %in% interesting_transcripts$transcript_id)
 
+# Export results
+write.csv(interesting_transcripts,
+          paste0("guide_effect/", transcript_list_name, "_melanoma_specific_FDR.csv"),
+          row.names = FALSE)
+
 # Export final results
-write.csv(transcript_comparison, 
+write.csv(transcript_stats, 
           paste0("guide_effect/", transcript_list_name, "_melanoma_vs_nonmelanoma.csv"), 
           row.names = FALSE)
 
@@ -366,46 +338,50 @@ write.csv(transcript_comparison,
 ggplot(transcript_comparison,
        aes(x = guide_effect_non_melanoma, 
            y = guide_effect_melanoma,
-           color = is_interesting,
            size = n_guides)) +
-  geom_point(alpha = 0.7) +
+  geom_point(alpha = 0.5, shape = 21, fill = "gray80", color = "gray60", stroke = 0.3) +  # Non-interesting: gray
+  geom_point(data = filter(transcript_comparison, is_interesting),
+             alpha = 0.7, shape = 21, 
+             aes(fill = fdr),
+             color = "black", stroke = 0.3) +  # Interesting: colored by FDR with black border
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
-  geom_hline(yintercept = -0.5, linetype = "dashed", color = "darkred", alpha = 0.5) +
-  geom_vline(xintercept = -0.5, linetype = "dashed", color = "gray50", alpha = 0.5) +
+  geom_hline(yintercept = -0.5, linetype = "dashed", color = "gray30", alpha = 0.5) +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "gray30", alpha = 0.5) +
   ggrepel::geom_text_repel(
     data = filter(transcript_comparison, is_interesting),
-    aes(label = gene_name),
+    aes(label = transcript_id),
     size = 3,
     max.overlaps = 15,
-    color = "darkred"
+    color = "black"
   ) +
   labs(
     title = paste(str_to_title(transcript_list_name), ": Melanoma vs Non-Melanoma"),
-    subtitle = "Red points = melanoma-specific targets (below diagonal)",
+    subtitle = "Colored points with black borders = interesting targets; gray = others",
     x = "Guide Effect in Non-Melanoma",
     y = "Guide Effect in Melanoma",
-    color = "Interesting",
+    fill = "FDR",
     size = "Number of Guides"
   ) +
   theme_minimal() +
-  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "gray70"),
-                     labels = c("TRUE" = "Melanoma-specific", "FALSE" = "Other"))
+  scale_fill_gradient(low = "red", high = "yellow") +
+  theme(legend.position = "right")
 
-# 3. Difference plot with interesting transcripts highlighted
-ggplot(transcript_comparison, 
-       aes(x = reorder(transcript_id, difference), 
-           y = difference,
+# Difference plot with interesting transcripts highlighted
+ggplot(transcript_stats, 
+       aes(x = reorder(transcript_id, effect_size), 
+           y = effect_size,
            fill = is_interesting)) +
   geom_bar(stat = "identity", alpha = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_hline(yintercept = -0.2, linetype = "dashed", color = "darkred", alpha = 0.5) +
   labs(
-    title = "Melanoma Specificity",
-    subtitle = "Red = interesting targets; Negative = guides more lethal in melanoma",
+    title = "Discordant Effect Size",
+    subtitle = "Red = significant (FDR < 0.05); Negative = more lethal in melanoma",
     x = "Transcript ID",
-    y = "Difference (Melanoma - Non-Melanoma)"
+    y = "Effect Size (Melanoma - Non-Melanoma)"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
   scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "steelblue"),
-                    labels = c("TRUE" = "Interesting", "FALSE" = "Other")) +
+                    labels = c("TRUE" = "Significant", "FALSE" = "Other")) +
   coord_flip()
