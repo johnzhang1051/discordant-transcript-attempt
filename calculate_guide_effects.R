@@ -327,11 +327,13 @@ write.csv(interesting_transcripts,
           paste0("guide_effect/", transcript_list_name, "_melanoma_specific_FDR.csv"),
           row.names = FALSE)
 
-# Export final results
 write.csv(transcript_stats, 
           paste0("guide_effect/", transcript_list_name, "_melanoma_vs_nonmelanoma.csv"), 
           row.names = FALSE)
 
+write.csv(transcript_guide_summary, 
+          paste0("guide_effect/", transcript_list_name, "_guide_effects.csv"), 
+          row.names = FALSE)
 ###################### Graphs
 
 # Scatter plot with interesting transcripts highlighted

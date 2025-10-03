@@ -119,3 +119,52 @@ results <- auto_biomart_query(
 
 MITF_gene_column <- grep(results$feature_page$external_gene_name, colnames(protein_gene_expression_data), value = TRUE, ignore.case = TRUE)
 print(MITF_gene_column)
+
+####################### GENERATE LIST OF EXPRESSED TRANSCRIPTS (>10 TPM in ≥25% of samples)
+# follows same logic as the resubmission paper
+library(data.table)
+conflicts_prefer(data.table::transpose)
+
+# Convert to data.table
+melanoma_transcript_dt <- as.data.table(melanoma_transcript_expression)
+
+# Get transcript columns (exclude metadata)
+metadata_cols <- c("index", "model_id", "profile_id", "is_default_entry", "...1", "...2")
+transcript_cols <- setdiff(names(melanoma_transcript_dt), metadata_cols)
+
+# Transpose to get transcripts as rows
+expr_matrix <- transpose(melanoma_transcript_dt[, ..transcript_cols])
+colnames(expr_matrix) <- melanoma_transcript_dt$model_id
+expr_matrix[, transcript_id := transcript_cols]
+
+# Calculate which transcripts pass threshold
+n_samples <- ncol(expr_matrix) - 1
+threshold_samples <- ceiling(0.25 * n_samples)
+
+expr_matrix[, pass_expression := rowSums(.SD > 10, na.rm = TRUE) >= threshold_samples, 
+            .SDcols = 1:n_samples]
+
+# Export list of expressed transcripts
+expressed_transcripts <- expr_matrix[pass_expression == TRUE, transcript_id]
+
+cat("\nTotal transcripts:", length(transcript_cols), "\n")
+cat("Expressed transcripts (>10 TPM in ≥25% samples):", length(expressed_transcripts), "\n")
+
+# Export list of expressed transcripts
+expressed_transcripts_df <- data.frame(
+  transcript_id = expressed_transcripts,
+  transcript_id_clean = sub("\\..*", "", expressed_transcripts)
+)
+
+write.csv(expressed_transcripts_df, 
+          "cleaned_data/transcript_filtered_logic.csv", 
+          row.names = FALSE)
+
+# # Optional: Filter the existing data to only expressed transcripts
+# melanoma_transcript_expression <- melanoma_transcript_expression %>%
+#   select(all_of(c("model_id", "index", "profile_id", "is_default_entry", 
+#                   expressed_transcripts)))
+# 
+# write.csv(melanoma_transcript_expression, 
+#           "cleaned_data/melanoma_transcript_expression_filtered.csv", 
+#           row.names = FALSE)

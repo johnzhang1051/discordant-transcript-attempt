@@ -12,6 +12,7 @@ melanoma_transcript_expression <- readr::read_csv(
 melanoma_gene_expression <- readr::read_csv(
   file=file.path("cleaned_data", "melanoma_gene_expression.csv")
 )
+
 ####################### Correlation analysis between MITF and transcripts:
 transcript_names <- colnames(melanoma_transcript_expression)[!colnames(melanoma_transcript_expression) %in% c("model_id", "MITF", "index", "profile_id", "is_default_entry", MITF_transcript, "...1", "...2")]
 total_transcripts <- length(transcript_names)
@@ -42,7 +43,7 @@ MITF_transcript_correlations <- map_dfr(transcript_names, function(transcript) {
 colnames(MITF_transcript_correlations)[1] <- "transcript_id"
 write.csv(MITF_transcript_correlations,"correlation_results/MITF_transcript_correlations.csv", row.names = FALSE)
 
-# also export correlations that are >0.5 for pearson and spearman
+# also export correlations that are >=0.5 for pearson and spearman
 MITF_transcript_correlations_filtered <- MITF_transcript_correlations %>%
   filter(pearson_corr >= 0.5 & spearman_corr >= 0.5)
 write.csv(MITF_transcript_correlations,"correlation_results/MITF_transcript_correlations_filtered.csv", row.names = FALSE)
@@ -104,30 +105,35 @@ library(biomaRt)
 ensembl_data <- useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
 
 filtered_transcripts <- MITF_transcript_correlations %>%
-  filter(pearson_corr > 0.5 | spearman_corr > 0.5)
+  filter(pearson_corr >= 0.5 | spearman_corr >= 0.5)
 
 transcript_ids <- sub("\\..*", "", sub("^[.]*", "", filtered_transcripts$transcript_id))
 
-
-
 # Get the transcript-to-gene mapping data FIRST
-transcript_gene_mapping <- getBM(
-  attributes = c("ensembl_transcript_id", "external_gene_name"),
+transcript_gene_map <- getBM(
+  attributes = c("ensembl_transcript_id", "external_gene_name", "transcript_biotype"),
   filters = "ensembl_transcript_id",
   values = transcript_ids,
   mart = ensembl_data
 )
 
 # THEN process the mapping for CoCor
-transcript_gene_map <- transcript_gene_mapping %>%
+transcript_gene_map <- transcript_gene_map %>%
   dplyr::select(transcript_ID = ensembl_transcript_id, 
-                Gene = external_gene_name) %>%
+                Gene = external_gene_name,
+                transcript_biotype = transcript_biotype) %>%
   dplyr::filter(!is.na(Gene))
 
-####################### CoCor Analysis (ADDED)
+####################### CoCor Analysis
 library(cocor)
 library(purrr)
 library(tibble)
+library(conflicted)
+conflicts_prefer(dplyr::intersect)
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::mutate)
+conflicts_prefer(dplyr::select)
+conflicts_prefer(dplyr::rename)
 
 # Prepare data matrices for CoCor
 trans_expr_raw <- melanoma_transcript_expression %>% 
@@ -234,16 +240,63 @@ discordant_transcripts <- cocor_results %>%
   filter(!is.na(FDR) & FDR < 0.05,
          !is.na(r_transcript), !is.na(r_gene),
          r_transcript >= 0.5, r_gene < 0.5) %>%
+  left_join(transcript_gene_map, by = c("transcript_id" = "transcript_ID")) %>%
+  filter(transcript_biotype == "protein_coding") %>%
   left_join(MITF_transcript_correlations, by = "transcript_id")
+
+discordant_transcripts <- discordant_transcripts %>%
+  rename(Gene = Gene.x) %>%
+  select(-Gene.y)
 
 # Identify correlated transcripts
 filtered_transcripts$transcript_id <- sub("\\..*", "", sub("^[.]*", "", filtered_transcripts$transcript_id))
 
+# Get correlated transcripts, remove discordant transcripts and only keep protein_coding
 correlated_transcripts <- filtered_transcripts %>%
+  left_join(transcript_gene_map, by = c("transcript_id" = "transcript_ID")) %>%
   filter(!transcript_id %in% discordant_transcripts$transcript_id) %>%
+  filter(transcript_biotype == "protein_coding") %>%
   left_join(cocor_results, by = "transcript_id")
+
+correlated_transcripts <- correlated_transcripts %>%
+  rename(Gene = Gene.x) %>%
+  select(-Gene.y)
 
 # Save results
 write.csv(cocor_results, "correlation_results/cocor_results.csv", row.names = FALSE)
 write.csv(discordant_transcripts, "correlation_results/discordant_transcripts.csv", row.names = FALSE)
 write.csv(correlated_transcripts, "correlation_results/correlated_transcripts.csv", row.names = FALSE)
+
+
+################ Load expressed transcripts list
+cocor_results <- read.csv("correlation_results/cocor_results.csv")
+discordant_transcripts <- read.csv("correlation_results/discordant_transcripts.csv")
+correlated_transcripts <- read.csv("correlation_results/correlated_transcripts.csv")
+
+
+expressed_transcripts <- readr::read_csv(
+  file = file.path("cleaned_data", "transcript_filtered_logic.csv")
+)
+
+# Check overlap with discordant transcripts
+discordant_expressed <- discordant_transcripts %>%
+  filter(transcript_id %in% expressed_transcripts$transcript_id_clean)
+
+discordant_not_expressed <- discordant_transcripts %>%
+  filter(!transcript_id %in% expressed_transcripts$transcript_id_clean)
+
+cat("\n=== EXPRESSION FILTER OVERLAP ===\n")
+cat("\nDiscordant transcripts:\n")
+cat("Total:", nrow(discordant_transcripts), "\n")
+cat("Passing expression filter (>10 TPM in ≥25% samples):", nrow(discordant_expressed), "\n")
+
+# Check overlap with correlated transcripts
+correlated_expressed <- correlated_transcripts %>%
+  filter(transcript_id %in% expressed_transcripts$transcript_id_clean)
+
+correlated_not_expressed <- correlated_transcripts %>%
+  filter(!transcript_id %in% expressed_transcripts$transcript_id_clean)
+
+cat("\nCorrelated transcripts:\n")
+cat("Total:", nrow(correlated_transcripts), "\n")
+cat("Passing expression filter (>10 TPM in ≥25% samples):", nrow(correlated_expressed), "\n")
