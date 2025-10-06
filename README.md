@@ -31,51 +31,34 @@ Biomart R Package
 * [Documentation](https://useast.ensembl.org/info/data/biomart/biomart_r_package.html)
 
 ## Analysis Flow:
-1. `clean_data.R`
-   * Starts with Depmap transcript, gene expression, and cell-line data
-   * Filter to only melanoma cell-lines for all 3 datasets
-   * Clean column names
-   * Identify MITF gene and MITF transcript column (important because version numbers change)
-   * These are used in `identify_discordant.R`
-2. `identify_MITF_high_low.R`:
-   * Starts with Depmap cell-line data, filter to `Melanoma`, `Melanoma, amelanotic`
+1. `identify_MITF_high_low.R`:
+   * Starts with Depmap cell-line data
    * Join in expression data for MITF-M (`ENST00000394351.9`)
    * Finds median expression for all cell-lines, using that as cutoff
    * Classifies Depmap cell-lines as MITF `high` or `low`
    * Exports list to `mitf_high_low/`
-3. `identify_discordant.R`
-   * Starts with Depmap transcript and gene expression data
-   * Using `CoCor` and `FDR < 0.05`, identifies discordant and correlated transcripts
-   * Export to `correlation_results/`
-   * NOTE: I'm thinking of using the MITF high/low and filtering to only MITF high for this code
-      * But I'm not sure if we'll have enough data. I'll try it first to see.
-4. `calculate_guide_effects.R`
+2. `analyze_sox10_effect.R`
+   * Using Depmap guide-effect data and cell-lines
+   * Find average guide-effect for melanoma and non-melanoma cell-lines, for sgRNA's that target SOX10
+   * Verify that there is noticeable differences (melanoma effect should be much more negative) 
+3. `calculate_guide_effects.R`
+   * Starting with the discordant and correlated lists from the resubmission (`resubmission_data/`)
    * Map CRISPR guides from DepMap to transcript exons using GenomicRanges, count guides per transcript
-   * Calculate guide effects (log2 fold change) separately for melanoma vs non-melanoma cell lines
-   * Compute melanoma specificity scores (difference, selectivity index, z-score)
-   * Identify transcripts selectively lethal in melanoma (high specificity, essential in melanoma)
-   * Export results to guide_effect/{transcript_list}_melanoma_vs_nonmelanoma.csv
-5. `analyze_unique_promoters.R`
-   * For list of transcripts, finds the # of promoters based on same data as resubmission
-   * About ~60% of transcripts in our list don't have any promoter data on them
-   * Exports `unique_promoters/all_transcripts_promoter_data.csv`, which is all the promoter data we have on a transcript-level
-6. `created_annotated_table.R`
+   * Pull in guide effects (log2 fold change) from Depmap for each cell-line
+   * Find average guide-effect for melanoma and non-melanoma cell-lines
+   * Calculate FDR for guide-effect difference in melanoma vs. non-melanoma
+   * Use results to find significant differences (`e.g FDR <= 0.05`)
+4. `created_annotated_table.R`
    * Create "master" list of transcripts from correlated + discordant
    * Annotate the data + calculations we have
    * This will probably be used as the list of transcripts we do pooled screens on
-7. `analyze_non_screened.R`
+5. `analyze_non_screened.R`
    * Compare Avana screened vs. non-screened transcripts
    * Specifically looking into the following:
       * Whether the transcript coordinates overlap (aren't unique)
       * Transcript length
       * % of GC content
    * Updates "master" table with new findings
-8. `analyze_MITF_high_low.R`
-   * Starting with the `MITF_high_low` classifications
-   * Reruns the whole Guide Effect analysis but keeps the MITF high/low classifications
-   * Then reports whether there were differences in guide effects
-9. `gene_ontology.R`
-* Reports on gene ontology for given transcript list
 
 
 ## Progress/Notes
@@ -102,6 +85,9 @@ Biomart R Package
 - Identified # of promoters each transcript has
 - Compared screened vs. non-screened for GC %, Transcript Overlaps, and Transcript Length
 - Analyzed SOX10 guides, found that guide effect was much stronger (negative) for melanoma cell-lines
+- Using the resubmission discordant + correlated lists, I analyzed guide effects on Melanoma vs. Non-Melanoma cell-lines
+
 
 ## Next Steps
-- Looking at guides that target discordant transcripts, see guide effects on Melanoma vs. Non-Melanoma cell-lines
+- Filter cell-lines to only MITF-M high expressing cell-lines, rerun guide effect analysis
+- Create final annotated table of transcripts we want to screen

@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "correlation_results/discordant_transcripts.csv"  # Changed to discordant
-transcript_list_name <- "discordant_transcripts"  # Changed to discordant
+transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "discordant_RESUBMISSION"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
@@ -299,7 +299,7 @@ transcript_stats <- transcript_stats %>%
   mutate(
     fdr = p.adjust(p_value, method = "fdr")
   ) %>%
-  arrange(fdr, effect_size) %>%
+  arrange(effect_size) %>%
   rename(
     transcript_id = exon_data.ensembl_transcript_id)
 
@@ -308,7 +308,7 @@ transcript_stats <- transcript_stats %>%
 # Statistical approach: FDR-corrected significance + biological thresholds
 interesting_transcripts <- transcript_stats %>%
   filter(
-    fdr <= 0.06 &                          # Statistically significant (I made it 0.06 because there were some right on the edge)
+    fdr <= 0.1 &                          # Statistically significant (I made it 0.1 because there were some right on the edge)
     effect_size <= -0.2 &                   # More essential in melanoma than non-melanoma
     mean_melanoma <= -0.3                   # Actually essential in melanoma
   ) %>%
@@ -323,10 +323,6 @@ transcript_stats <- transcript_stats %>%
   mutate(is_interesting = transcript_id %in% interesting_transcripts$transcript_id)
 
 # Export results
-write.csv(interesting_transcripts,
-          paste0("guide_effect/", transcript_list_name, "_melanoma_specific_FDR.csv"),
-          row.names = FALSE)
-
 write.csv(transcript_stats, 
           paste0("guide_effect/", transcript_list_name, "_melanoma_vs_nonmelanoma.csv"), 
           row.names = FALSE)
