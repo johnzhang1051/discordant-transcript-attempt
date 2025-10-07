@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "resubmission_data/correlated_RESUBMISSION.csv"  # Changed to discordant
-transcript_list_name <- "correlated_RESUBMISSION"  # Changed to discordant
+transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "discordant_RESUBMISSION"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
@@ -82,6 +82,9 @@ results <- auto_biomart_query(
   values = transcript_ids,
   mart = ensembl_data
 )
+
+gene_name_lookup <- results$structure %>%
+  distinct(ensembl_transcript_id, external_gene_name)
 
 # export Biomart data
 #write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
@@ -202,6 +205,11 @@ screen_sequence_map <- readr::read_csv(
 
 # Get cell line info
 cell_info <- read.csv("depmap-data/Model.csv")
+# Bring in MITF-M expression classifications, filter to "high-expressing"
+mitf_classification <- read.csv("mitf_high_low/mitf_binary_classification.csv")
+high_mitf_models <- mitf_classification %>%
+  filter(mitf_binary == "High") %>%
+  pull(ModelID)
 
 # Define melanoma types
 melanoma_subtypes <- c("Melanoma", "Cutaneous Melanoma")
@@ -221,7 +229,16 @@ guide_effects <- filtered_lfc %>%
   left_join(screen_sequence_map, by = "SequenceID") %>%
   left_join(cell_info, by = "ModelID") %>%
   filter(!is.na(OncotreeSubtype)) %>%  # Remove rows without cancer type
-  mutate(is_melanoma = OncotreeSubtype %in% melanoma_subtypes)
+  mutate(
+    is_melanoma = OncotreeSubtype %in% melanoma_subtypes,
+    # Only filter melanoma lines by MITF status
+    keep_cell_line = case_when(
+      is_melanoma ~ ModelID %in% high_mitf_models,  # Melanoma: only keep if MITF high
+      !is_melanoma ~ TRUE                           # Non-melanoma: keep all
+    )
+  ) %>%
+  filter(keep_cell_line) %>%  # Apply the filter
+  select(-keep_cell_line)     # Remove helper column
 
 # Join with transcript overlaps
 transcript_guide_effects <- overlaps %>%
@@ -297,9 +314,6 @@ print(interesting_transcripts)
 transcript_stats <- transcript_stats %>%
   mutate(is_interesting = transcript_id %in% interesting_transcripts$transcript_id)
 
-gene_name_lookup <- results$structure %>%
-distinct(ensembl_transcript_id, external_gene_name)
-
 # Then when creating transcripts_without_guides:
 transcripts_without_guides <- transcript_list %>%
   filter(!transcript_id_clean %in% transcripts_with_guides) %>%
@@ -349,7 +363,7 @@ combined_results <- transcript_guide_summary %>%
 
 # Export combined results
 write.csv(combined_results, 
-          paste0("guide_effect/", transcript_list_name, "_guide_effect_results.csv"), 
+          paste0("guide_effect/mitf_high/", transcript_list_name, "_guide_effect_results.csv"), 
           row.names = FALSE)
 
 ###################### Graphs
@@ -375,7 +389,7 @@ ggplot(transcript_stats,
     color = "black"
   ) +
   labs(
-    title = paste(str_to_title(transcript_list_name), ": Melanoma vs Non-Melanoma"),
+    title = paste(str_to_title(transcript_list_name), ": High MITF Expressing Melanoma vs Non-Melanoma"),
     subtitle = "Colored points with black borders = interesting targets; gray = others",
     x = "Guide Effect in Non-Melanoma",
     y = "Guide Effect in Melanoma",
@@ -395,7 +409,7 @@ ggplot(transcript_stats,
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = -0.2, linetype = "dashed", color = "darkred", alpha = 0.5) +
   labs(
-    title = "Discordant Effect Size",
+    title = "Discordant Effect Size for High MITF Expressing Melanoma",
     subtitle = "Red = significant (FDR < 0.05); Negative = more lethal in melanoma",
     x = "Transcript ID",
     y = "Effect Size (Melanoma - Non-Melanoma)"
