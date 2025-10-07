@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
-transcript_list_name <- "discordant_RESUBMISSION"  # Changed to discordant
+transcript_list_file <- "resubmission_data/correlated_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "correlated_RESUBMISSION"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)

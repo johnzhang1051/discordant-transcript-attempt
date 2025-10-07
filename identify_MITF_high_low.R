@@ -79,7 +79,7 @@ describe(combined_data$ENST00000394351.9)
 
 ############### ############### ############### Export classification of model-id's that are MITFM high or low
 
-# Set cutoff
+# Set cutoff for whether it's high or low
 #cutoff_threshold <- median(combined_data$`ENST00000394351.9`, na.rm = TRUE)
 cutoff_threshold <- 100
 ####################### Create Classifications
@@ -130,7 +130,7 @@ write.csv(binary_output, binary_output_file, row.names = FALSE)
 ####################### Create Visualization with Classifications
 
 # Enhanced histogram showing classifications
-classification_plot <- ggplot(mitf_classifications, aes(x = mitf_expression)) +
+ggplot(mitf_classifications, aes(x = mitf_expression)) +
   geom_histogram(aes(fill = mitf_binary), bins = 20, alpha = 0.7, color = "black") +
   geom_vline(xintercept = cutoff_threshold, 
              color = "red", linetype = "dashed", size = 1.2) +
@@ -145,5 +145,3 @@ classification_plot <- ggplot(mitf_classifications, aes(x = mitf_expression)) +
   ) +
   theme_minimal() +
   theme(legend.position = "bottom")
-
-print(classification_plot)
