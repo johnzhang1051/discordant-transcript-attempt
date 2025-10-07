@@ -4,6 +4,7 @@ library(tidyverse)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(psych)
 
 ####################### Getting data
 # Get transcript/isoform expression data - so we know which transcripts are expressed
@@ -17,7 +18,7 @@ cell_info <- read.csv("depmap-data/Model.csv")
 
 
 # filter to all melanoma types that are not uveal, acral, mucosal, or uveal
-specific_subtypes <- c("Melanoma", "Melanoma, amelanotic", "Cutaneous Melanoma")
+specific_subtypes <- c("Melanoma", "Cutaneous Melanoma")
 melanoma_cells <- cell_info %>%
   filter(OncotreeSubtype %in% specific_subtypes)
 
@@ -40,20 +41,26 @@ combined_data <- combined_data %>%
 mean_val <- mean(combined_data$`ENST00000394351.9`, na.rm = TRUE)
 median_val <- median(combined_data$`ENST00000394351.9`, na.rm = TRUE)
 n_samples <- sum(!is.na(combined_data$`ENST00000394351.9`))
+third_quartile <- quantile(combined_data$`ENST00000394351.9`, 0.75)
 
-mitf_distribution_plot <- ggplot(combined_data, aes(x = `ENST00000394351.9`)) +
+ggplot(combined_data, aes(x = `ENST00000394351.9`)) +
   geom_histogram(bins = 20, fill = "steelblue", alpha = 0.7, color = "black") +
   geom_vline(xintercept = mean_val, 
              color = "red", linetype = "dashed", size = 1) +
   geom_vline(xintercept = median_val, 
              color = "orange", linetype = "dashed", size = 1) +
+  geom_vline(xintercept = third_quartile, 
+             color = "green", linetype = "dashed", size = 1) +
   # Add text labels for mean and median
   annotate("text", x = mean_val, y = Inf, 
            label = paste("Mean =", round(mean_val, 2)), 
            color = "red", vjust = 2, hjust = -0.1, size = 3.5, fontface = "bold") +
   annotate("text", x = median_val, y = Inf, 
            label = paste("Median =", round(median_val, 2)), 
-           color = "orange", vjust = 4, hjust = 1.1, size = 3.5, fontface = "bold") +
+           color = "orange", vjust = 7, hjust = 1.1, size = 3.5, fontface = "bold") +
+  annotate("text", x = third_quartile, y = Inf, 
+           label = paste("3rd Quartile =", round(third_quartile, 2)), 
+           color = "green", vjust = 7, hjust = -0.1, size = 3.5, fontface = "bold") +
   # Add sample count label
   annotate("text", x = Inf, y = Inf, 
            label = paste("n =", n_samples), 
@@ -67,21 +74,14 @@ mitf_distribution_plot <- ggplot(combined_data, aes(x = `ENST00000394351.9`)) +
   ) +
   theme_minimal()
 
-print(mitf_distribution_plot)
-
-
-# Based on results, I think we should use the median of 67.94 TPM Log + 1
 # Standard deviation is quite high, wide range as well
-library(psych)
-describe(combined_data$ENST00000394351.9)
+summary(combined_data$ENST00000394351.9)
 
 
+############### Choose cutoff to determine whether cell-line is MITFM high or low (arguably most important part of this script!)
 
-############### ############### ############### Export classification of model-id's that are MITFM high or low
+cutoff_threshold <- median_val # choose from median_val, mean_val, third_quartile
 
-# Set cutoff for whether it's high or low
-#cutoff_threshold <- median(combined_data$`ENST00000394351.9`, na.rm = TRUE)
-cutoff_threshold <- 100
 ####################### Create Classifications
 
 # Binary classification (High/Low using median)
@@ -93,7 +93,6 @@ mitf_classifications <- combined_data %>%
       `ENST00000394351.9` < cutoff_threshold ~ "Low",
       TRUE ~ "Unknown"
     ),
-
     # Add the actual expression value for reference
     mitf_expression = `ENST00000394351.9`
   ) %>%
@@ -112,14 +111,10 @@ mitf_classifications <- combined_data %>%
 # Binary classification counts
 binary_summary <- mitf_classifications %>%
   count(mitf_binary) %>%
-  mutate(percentage = round(100 * n / sum(n), 1))
+  mutate(percentage = round(n / sum(n), 2))
 print(binary_summary)
 
 ####################### Export Classifications
-
-# Export full classification table
-full_output_file <- "mitf_high_low/mitf_expression_classifications_full.csv"
-write.csv(mitf_classifications, full_output_file, row.names = FALSE)
 
 # Export simplified binary classification (most commonly used)
 binary_output <- mitf_classifications %>%

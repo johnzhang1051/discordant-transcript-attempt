@@ -12,12 +12,13 @@ library(stringr)
 ####### Get Data:
 
 # Pull transcripts
-transcripts <- read.csv("annotated_table/annotated_transcripts_updated.csv")
+transcripts <- read.csv("guide_effect/mitf_high/discordant_MITF_HIGH_guide_effect_results.csv")
+
 # filter to non-screened transcripts
-transcripts <- transcripts %>% filter(crispr_screened == FALSE) 
+transcripts <- transcripts %>% filter(n_exons_targeted == 0) 
 
 ## extract to vector
-symbols <- as.character(transcripts$Gene)
+symbols <- as.character(transcripts$gene_name)
 
 # Now run bitr with the vectors
 entrez <- bitr(symbols, fromType = "SYMBOL",

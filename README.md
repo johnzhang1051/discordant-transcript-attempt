@@ -48,6 +48,13 @@ Biomart R Package
    * Find average guide-effect for melanoma and non-melanoma cell-lines
    * Calculate FDR for guide-effect difference in melanoma vs. non-melanoma
    * Use results to find significant differences (`e.g FDR <= 0.05`)
+3. `calculate_guide_effects_mitfm_filtered.R`
+   * Do same thing but for MITFT-M high expressing cell-lines
+   * For melanoma cell-lines, remove all "low-expressing MITF" cell-lines
+   * Then run same guide-effect analysis
+3. `gene_ontology.R`
+   * Look at lists of transcripts I've generated
+   * See if there's anything interesting GO wise
 4. `created_annotated_table.R`
    * Create "master" list of transcripts from correlated + discordant
    * Annotate the data + calculations we have

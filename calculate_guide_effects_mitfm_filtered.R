@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "resubmission_data/correlated_RESUBMISSION.csv"  # Changed to discordant
-transcript_list_name <- "correlated_RESUBMISSION"  # Changed to discordant
+transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "discordant_MITF_HIGH"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
@@ -301,8 +301,8 @@ transcript_stats <- transcript_stats %>%
 interesting_transcripts <- transcript_stats %>%
   filter(
     fdr <= 0.1 &                          # Statistically significant (I made it 0.1 because there were some right on the edge)
-    effect_size <= -0.2 &                   # More essential in melanoma than non-melanoma
-    mean_melanoma <= -0.3                   # Actually essential in melanoma
+    effect_size < 0 &                   # More essential in melanoma than non-melanoma
+    mean_melanoma < 0                   # Actually essential in melanoma
   ) %>%
   arrange(fdr, effect_size) %>%
   select(transcript_id, gene_name, n_guides,
@@ -400,22 +400,3 @@ ggplot(transcript_stats,
   scale_fill_gradient(low = "red", high = "yellow") +
   theme(legend.position = "right")
 
-# Difference plot with interesting transcripts highlighted
-ggplot(transcript_stats, 
-       aes(x = reorder(transcript_id, effect_size), 
-           y = effect_size,
-           fill = is_interesting)) +
-  geom_bar(stat = "identity", alpha = 0.8) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = -0.2, linetype = "dashed", color = "darkred", alpha = 0.5) +
-  labs(
-    title = "Discordant Effect Size for High MITF Expressing Melanoma",
-    subtitle = "Red = significant (FDR < 0.05); Negative = more lethal in melanoma",
-    x = "Transcript ID",
-    y = "Effect Size (Melanoma - Non-Melanoma)"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
-  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "steelblue"),
-                    labels = c("TRUE" = "Significant", "FALSE" = "Other")) +
-  coord_flip()
