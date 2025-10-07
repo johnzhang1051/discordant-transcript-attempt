@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
-transcript_list_name <- "discordant_MITF_HIGH"  # Changed to discordant
+transcript_list_file <- "resubmission_data/correlated_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "correlated_MITF_HIGH"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
@@ -300,7 +300,7 @@ transcript_stats <- transcript_stats %>%
 # Statistical approach: FDR-corrected significance + biological thresholds
 interesting_transcripts <- transcript_stats %>%
   filter(
-    fdr <= 0.1 &                          # Statistically significant (I made it 0.1 because there were some right on the edge)
+    fdr <= 0.05 &                          # Statistically significant (I made it 0.1 because there were some right on the edge)
     effect_size < 0 &                   # More essential in melanoma than non-melanoma
     mean_melanoma < 0                   # Actually essential in melanoma
   ) %>%
