@@ -3,6 +3,8 @@ library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(conflicted)
+library(biomaRt)
+library(GenomicRanges)
 
 conflicts_prefer(dplyr::rename)
 conflicts_prefer(dplyr::first)
@@ -26,12 +28,6 @@ screen_sequence_map <- readr::read_csv(
   file=file.path("depmap-data", file="ScreenSequenceMap.csv")
 )
 
-screen_sequence_map <- readr::read_csv(
-  file = file.path("depmap-data", "ScreenSequenceMap.csv")
-)
-
-correlated_transcripts <- "resubmission_data/correlated_RESUBMISSION.csv"
-discordant_transcripts <- "resubmission_data/discordant_RESUBMISSION.csv"
 ####################### FILTER FOR EIF3E GUIDES
 
 # Get all guides targeting eif3e
@@ -39,9 +35,7 @@ eif3e_guides <- avana_guide_map %>%
   filter(Gene == "EIF3E (3646)") %>%
   select(sgRNA, Gene, GenomeAlignment)
 
-cat("Found", nrow(eif3e_guides), "guides targeting eif3e\n")
-
-####################### GET eif3e GUIDE EFFECTS
+####################### GET EIF3E GUIDE EFFECTS
 
 # Filter log fold change data for eif3e guides
 eif3e_lfc <- avana_logfold_change %>%
@@ -54,7 +48,6 @@ eif3e_lfc <- avana_logfold_change %>%
 eif3e_effects <- eif3e_lfc %>%
   left_join(screen_sequence_map, by = "SequenceID") %>%
   left_join(cell_info, by = "ModelID")
-  #filter(!is.na(OncotreeLineage))  # Remove any without cancer type info
 
 ####################### DEFINE MELANOMA CELL LINES
 
@@ -76,7 +69,7 @@ eif3e_summary <- eif3e_effects %>%
     .groups = "drop"
   )
 
-####################### PLOT: eif3e Guide Effects by Cancer Type
+####################### PLOT: EIF3E Guide Effects by Cancer Type
 
 # Get the top 25 cancer types with lowest (most negative) mean LFC
 top_25_cancers <- eif3e_summary %>%
@@ -88,7 +81,7 @@ top_25_cancers <- eif3e_summary %>%
 
 # Filter to only these top 25
 eif3e_primary_filtered <- eif3e_summary %>%
-  filter(OncotreePrimaryDisease %in% top_25_cancers)%>%
+  filter(OncotreePrimaryDisease %in% top_25_cancers) %>%
   filter(!is.na(OncotreePrimaryDisease), !is.na(mean_lfc))
 
 # Create color palette - check if "Melanoma" is in the filtered data
@@ -101,7 +94,6 @@ if (melanoma_present) {
     setNames(rep("gray70", length(other_cancers)), other_cancers)
   )
 } else {
-  # If melanoma didn't make top 25, just use gray for all
   color_palette <- setNames(rep("gray70", length(top_25_cancers)), top_25_cancers)
 }
 
@@ -111,10 +103,10 @@ ggplot(eif3e_primary_filtered, aes(x = reorder(OncotreePrimaryDisease, -mean_lfc
   geom_boxplot(alpha = 0.7) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
   labs(
-    title = "eif3e Guide Effects Across Cancer Types (Top 25 Most Negative)",
+    title = "EIF3E Guide Effects Across Cancer Types (Top 25 Most Negative)",
     subtitle = "Lower values = more cell death (more essential)",
     x = "Cancer Type",
-    y = "Mean Log2 Fold Change",
+    y = "Mean Log2 Fold Change"
   ) +
   theme_minimal() +
   theme(
@@ -140,7 +132,7 @@ ggplot(eif3e_melanoma_comparison, aes(x = sgRNA, y = mean_lfc, fill = cancer_gro
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = -0.5, linetype = "dashed", color = "darkred", alpha = 0.5) +
   labs(
-    title = "eif3e Guide Effects: Melanoma vs Other Cancers",
+    title = "EIF3E Guide Effects: Melanoma vs Other Cancers",
     subtitle = "Each bar represents mean effect across cell lines",
     x = "sgRNA",
     y = "Mean Log2 Fold Change",
@@ -176,10 +168,7 @@ t_test_result <- t.test(melanoma_lfc, other_lfc)
 cat("p-value:", t_test_result$p.value, "\n")
 cat("Mean difference:", t_test_result$estimate[1] - t_test_result$estimate[2], "\n")
 
-###################### ANALYZE eif3e TRANSCRIPTS AND GUIDE EFFECTS
-
-library(biomaRt)
-library(GenomicRanges)
+###################### ANALYZE EIF3E TRANSCRIPTS AND GUIDE EFFECTS
 
 # Query biomaRt for eif3e transcripts
 ensembl_data <- useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
@@ -197,13 +186,13 @@ eif3e_transcripts <- getBM(
     "transcript_biotype"
   ),
   filters = "external_gene_name",
-  values = "eif3e",
+  values = "EIF3E",
   mart = ensembl_data
 )
 
-cat("\nFound", length(unique(eif3e_transcripts$ensembl_transcript_id)), "eif3e transcripts\n")
+cat("\nFound", length(unique(eif3e_transcripts$ensembl_transcript_id)), "EIF3E transcripts\n")
 
-####################### MAP GUIDES TO eif3e TRANSCRIPTS
+####################### MAP GUIDES TO EIF3E TRANSCRIPTS
 
 # Prepare guide data
 eif3e_guides_map <- eif3e_guides %>%
@@ -229,7 +218,7 @@ eif3e_exons <- eif3e_transcripts %>%
     strand == -1 ~ "-",
     TRUE ~ "*"
   )) %>%
-  dplyr::select(-strand)  # Remove conflicting column names
+  dplyr::select(-strand)
 
 # Create GenomicRanges objects
 exon_gr <- makeGRangesFromDataFrame(
@@ -238,8 +227,8 @@ exon_gr <- makeGRangesFromDataFrame(
   start.field = "exon_chrom_start", 
   end.field = "exon_chrom_end",
   strand.field = "strand_char",
-  keep.extra.columns = TRUE
-  , ignore.strand = TRUE
+  keep.extra.columns = TRUE,
+  ignore.strand = TRUE
 )
 
 guide_gr <- makeGRangesFromDataFrame(
@@ -253,8 +242,8 @@ guide_gr <- makeGRangesFromDataFrame(
   start.field = "guide_coordinate",
   end.field = "guide_coordinate",
   strand.field = "strand_char",
-  keep.extra.columns = TRUE
-  , ignore.strand = TRUE
+  keep.extra.columns = TRUE,
+  ignore.strand = TRUE
 )
 
 # Find overlaps between guides and exons
@@ -350,76 +339,177 @@ eif3e_transcript_other <- eif3e_transcript_aggregated %>%
 eif3e_transcript_comparison <- eif3e_transcript_melanoma %>%
   left_join(eif3e_transcript_other, by = "transcript_id") %>%
   mutate(
-    lfc_difference = melanoma_mean_lfc - other_mean_lfc,
-    melanoma_specific = melanoma_mean_lfc < -0.5 & other_mean_lfc > -0.3
-  )
+    effect_size = melanoma_mean_lfc - other_mean_lfc
+  ) %>%
+  # Add guide list and cell line info
+  left_join(
+    eif3e_transcript_guide_counts %>% select(transcript_id, guide_list, n_exons_targeted),
+    by = "transcript_id"
+  ) %>%
+  # Get melanoma cell lines for this transcript
+  left_join(
+    eif3e_transcript_effects %>%
+      filter(is_melanoma) %>%
+      group_by(exon_data.ensembl_transcript_id) %>%
+      summarise(
+        melanoma_cell_lines = paste(unique(ModelID), collapse = ";"),
+        .groups = "drop"
+      ),
+    by = c("transcript_id" = "exon_data.ensembl_transcript_id")
+  ) %>%
+  # Get non-melanoma cell lines
+  left_join(
+    eif3e_transcript_effects %>%
+      filter(!is_melanoma) %>%
+      group_by(exon_data.ensembl_transcript_id) %>%
+      summarise(
+        non_melanoma_cell_lines = paste(unique(ModelID), collapse = ";"),
+        .groups = "drop"
+      ),
+    by = c("transcript_id" = "exon_data.ensembl_transcript_id")
+  ) %>%
+  filter(biotype == "protein_coding") %>%
+  arrange(effect_size)
+
 
 write.csv(eif3e_transcript_comparison, "eif3e_analysis/eif3e_transcript_effects_comparison.csv", row.names = FALSE)
 
-####################### TRANSCRIPT VISUALIZATIONS
+####################### COMPARE GUIDES: DISCORDANT vs OTHER (GUIDE-LEVEL ANALYSIS)
 
-# Plot 1: Number of guides targeting each transcript
-ggplot(eif3e_all_transcript_summary, aes(x = reorder(transcript_id, -n_guides_targeting), 
-                                         y = n_guides_targeting)) +
-  geom_bar(stat = "identity", fill = "steelblue", alpha = 0.7) +
-  labs(
-    title = "Number of Guides Targeting Each eif3e Transcript",
-    x = "Transcript ID",
-    y = "Number of Guides"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+# Load discordant transcript list
+discordant_list <- read.csv("resubmission_data/discordant_RESUBMISSION.csv")
 
-# Plot 2: Guide effects - Melanoma vs Other cancers for each transcript
-eif3e_transcript_comparison_long <- eif3e_transcript_comparison %>%
-  select(transcript_id, melanoma_mean_lfc, other_mean_lfc) %>%
-  pivot_longer(cols = c(melanoma_mean_lfc, other_mean_lfc),
-               names_to = "cancer_type",
-               values_to = "mean_lfc") %>%
-  mutate(cancer_type = ifelse(cancer_type == "melanoma_mean_lfc", 
-                              "Melanoma", "Other Cancers"))
+# Find which EIF3E transcripts are discordant
+eif3e_discordant <- eif3e_transcript_comparison %>%
+  filter(transcript_id %in% discordant_list$transcript_id) %>%
+  pull(transcript_id)
 
-ggplot(eif3e_transcript_comparison_long, 
-       aes(x = reorder(transcript_id, -mean_lfc), y = mean_lfc, fill = cancer_type)) +
+# All other EIF3E transcripts
+eif3e_other <- eif3e_transcript_comparison %>%
+  filter(!transcript_id %in% discordant_list$transcript_id) %>%
+  pull(transcript_id)
+
+cat("\n=== EIF3E TRANSCRIPT CLASSIFICATION ===\n")
+cat("Discordant EIF3E transcripts:", length(eif3e_discordant), "\n")
+cat("Other EIF3E transcripts:", length(eif3e_other), "\n")
+
+if (length(eif3e_discordant) > 0) {
+  cat("\nDiscordant:", paste(eif3e_discordant, collapse = ", "), "\n")
+}
+
+# Get guides targeting discordant vs other transcripts
+guides_discordant <- eif3e_overlaps %>%
+  filter(exon_data.ensembl_transcript_id %in% eif3e_discordant) %>%
+  pull(guide_data.sgRNA) %>%
+  unique()
+
+guides_other <- eif3e_overlaps %>%
+  filter(exon_data.ensembl_transcript_id %in% eif3e_other) %>%
+  pull(guide_data.sgRNA) %>%
+  unique()
+
+cat("\nGuides targeting discordant transcripts:", length(guides_discordant), "\n")
+cat("Guides targeting other transcripts:", length(guides_other), "\n")
+
+####################### GUIDE-LEVEL COMPARISON (NO TRANSCRIPT INFLATION)
+
+# Classify guides at the GUIDE level (not inflated by transcript counts)
+eif3e_guide_effects <- eif3e_effects %>%
+  mutate(
+    transcript_category = case_when(
+      sgRNA %in% guides_discordant ~ "Discordant",
+      sgRNA %in% guides_other ~ "Other",
+      TRUE ~ "Unclassified"
+    )
+  ) 
+
+# Aggregate by GUIDE, not by (guide × transcript)
+guide_level_comparison <- eif3e_guide_effects %>%
+  group_by(sgRNA, transcript_category, is_melanoma) %>%
+  summarise(
+    mean_lfc = mean(log_fold_change, na.rm = TRUE),
+    n_cell_lines = n(),
+    .groups = "drop"
+  )
+
+# Overall comparison across all cell lines
+overall_by_guide <- guide_level_comparison %>%
+  group_by(transcript_category) %>%
+  summarise(
+    n_guides = n_distinct(sgRNA),
+    mean_lfc = mean(mean_lfc, na.rm = TRUE),
+    median_lfc = median(mean_lfc, na.rm = TRUE),
+    sd_lfc = sd(mean_lfc, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+cat("\n=== GUIDE-LEVEL COMPARISON (ALL CELL LINES) ===\n")
+print(overall_by_guide)
+
+# T-test at guide level (all cell lines)
+discordant_guides_lfc <- guide_level_comparison %>%
+  filter(transcript_category == "Discordant") %>%
+  pull(mean_lfc)
+
+other_guides_lfc <- guide_level_comparison %>%
+  filter(transcript_category == "Other") %>%
+  pull(mean_lfc)
+
+cat("\nNumber of guide measurements (Discordant):", length(discordant_guides_lfc), "\n")
+cat("Number of guide measurements (Other):", length(other_guides_lfc), "\n")
+
+####################### ANALYSIS 2: Split by Melanoma vs Non-Melanoma
+
+# Comparison split by cancer type at guide level
+cancer_comparison_guides <- guide_level_comparison %>%
+  group_by(transcript_category, is_melanoma) %>%
+  summarise(
+    n_guides = n_distinct(sgRNA),
+    mean_lfc = mean(mean_lfc, na.rm = TRUE),
+    median_lfc = median(mean_lfc, na.rm = TRUE),
+    sd_lfc = sd(mean_lfc, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(cancer_type = ifelse(is_melanoma, "Melanoma", "Non-Melanoma"))
+
+cat("\n=== GUIDE-LEVEL COMPARISON BY CANCER TYPE ===\n")
+print(cancer_comparison_guides)
+
+# T-test for melanoma (guide-level)
+discordant_melanoma_guides <- guide_level_comparison %>%
+  filter(transcript_category == "Discordant", is_melanoma) %>%
+  pull(mean_lfc)
+
+other_melanoma_guides <- guide_level_comparison %>%
+  filter(transcript_category == "Other", is_melanoma) %>%
+  pull(mean_lfc)
+
+cat("\nMelanoma - Discordant guides:", length(discordant_melanoma_guides), "\n")
+cat("Melanoma - Other guides:", length(other_melanoma_guides), "\n")
+
+# Visualization: Guide-level comparison
+ggplot(cancer_comparison_guides, 
+       aes(x = transcript_category, y = mean_lfc, fill = cancer_type)) +
   geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = -0.5, linetype = "dashed", color = "darkred", alpha = 0.5) +
   labs(
-    title = "eif3e Transcript Guide Effects: Melanoma vs Other Cancers",
-    subtitle = "Only transcripts with guides shown",
-    x = "Transcript ID",
+    title = "EIF3E Guide Effects: Discordant vs Other Transcripts (Guide-Level)",
+    subtitle = "Split by cancer type",
+    x = "Transcript Category",
     y = "Mean Log2 Fold Change",
     fill = "Cancer Type"
   ) +
   theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
-    legend.position = "top"
-  ) +
-  scale_fill_manual(values = c("Melanoma" = "red", "Other Cancers" = "gray70"))
+  theme(legend.position = "top") +
+  scale_fill_manual(values = c("Melanoma" = "red", "Non-Melanoma" = "gray70"))
 
-# Plot 3: Melanoma specificity - difference in effect
-ggplot(eif3e_transcript_comparison, 
-       aes(x = reorder(transcript_id, -lfc_difference), 
-           y = lfc_difference,
-           fill = melanoma_specific)) +
-  geom_bar(stat = "identity", alpha = 0.7) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  labs(
-    title = "Melanoma Specificity of eif3e Transcript Targeting",
-    subtitle = "Difference = Melanoma LFC - Other Cancers LFC (more negative = more melanoma-specific)",
-    x = "Transcript ID",
-    y = "LFC Difference (Melanoma - Other)",
-    fill = "Melanoma Specific"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8)
-  ) +
-  scale_fill_manual(values = c("TRUE" = "darkred", "FALSE" = "steelblue"))
+# Export results
+write.csv(guide_level_comparison, 
+          "eif3e_analysis/discordant_vs_other_guide_level.csv", 
+          row.names = FALSE)
 
-####################### SUMMARY STATISTICS
+write.csv(guide_level_comparison, 
+          "eif3e_analysis/discordant_vs_other_guide_level.csv", 
+          row.names = FALSE)
 
-# Export final summary
-write.csv(eif3e_melanoma_comparison, "eif3e_analysis/eif3e_melanoma_comparison.csv", row.names = FALSE)
-write.csv(melanoma_stats, "eif3e_analysis/eif3e_statistical_summary.csv", row.names = FALSE)
