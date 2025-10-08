@@ -12,8 +12,8 @@ conflicts_prefer(dplyr::filter)
 
 ####################### CONFIGURABLE INPUT - CHOOSE YOUR TRANSCRIPT LIST
 # Modify these two lines to switch between different transcript lists:
-transcript_list_file <- "resubmission_data/correlated_RESUBMISSION.csv"  # Changed to discordant
-transcript_list_name <- "correlated_MITF_HIGH"  # Changed to discordant
+transcript_list_file <- "resubmission_data/discordant_RESUBMISSION.csv"  # Changed to discordant
+transcript_list_name <- "discordant_MITF_HIGH"  # Changed to discordant
 
 # Load the chosen transcript list
 transcript_list <- readr::read_csv(file = transcript_list_file)
@@ -87,7 +87,7 @@ gene_name_lookup <- results$structure %>%
   distinct(ensembl_transcript_id, external_gene_name)
 
 # export Biomart data
-#write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
+write.csv(results$structure, paste0("guide_effect/mitf_high/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
 
 #######################  Get exon-level dataframe
 exon_locations <- results$structure

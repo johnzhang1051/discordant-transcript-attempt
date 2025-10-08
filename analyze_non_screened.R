@@ -21,8 +21,8 @@ master_table$transcript_id_clean <- sub("\\..*", "", sub("^[.]*", "", master_tab
 
 ####################### Load existing biomaRt data from saved CSVs
 # Load your previously saved biomaRt exon location data
-correlated_exon_locations <- read_csv("guide_effect/correlated_transcripts_exon_locations.csv")
-discordant_exon_locations <- read_csv("guide_effect/discordant_transcripts_exon_locations.csv")
+correlated_exon_locations <- read_csv("guide_effect/mitf_high/correlated_MITF_HIGH_exon_locations.csv")
+discordant_exon_locations <- read_csv("guide_effect/mitf_high/discordant_MITF_HIGH_exon_locations.csv")
 
 # Combine them
 exon_locations <- bind_rows(
@@ -194,8 +194,8 @@ master_table$transcript_id_clean <- sub("\\..*", "", sub("^[.]*", "", master_tab
 
 ####################### Load existing biomaRt data from saved CSVs
 # Load your previously saved biomaRt exon location data
-correlated_exon_locations <- read_csv("guide_effect/correlated_transcripts_exon_locations.csv")
-discordant_exon_locations <- read_csv("guide_effect/discordant_transcripts_exon_locations.csv")
+correlated_exon_locations <- read_csv("guide_effect/mitf_high/correlated_MITF_HIGH_exon_locations.csv")
+discordant_exon_locations <- read_csv("guide_effect/mitf_high/discordant_MITF_HIGH_exon_locations.csv")
 
 # Combine them
 exon_locations <- bind_rows(
@@ -464,22 +464,18 @@ ggplot(complete_analysis %>% filter(!is.na(transcript_length)),
 # Use correlation data already in complete_analysis (from master table)
 # Filter for transcripts with correlation data
 mitf_comparison <- complete_analysis %>%
-  filter(!is.na(pearson_corr) | !is.na(spearman_corr) | !is.na(r_gene))
+  filter(!is.na(r_transcript) | !is.na(r_gene))
 
 # Summary statistics by screening status - transcript-level correlations
 transcript_mitf_summary <- mitf_comparison %>%
-  filter(!is.na(pearson_corr), !is.na(spearman_corr)) %>%
+  filter(!is.na(r_transcript)) %>%
   group_by(screening_status) %>%
   summarise(
     count = n(),
     # Transcript-level Pearson correlation stats
-    mean_transcript_pearson = round(mean(pearson_corr, na.rm = TRUE), 4),
-    median_transcript_pearson = round(median(pearson_corr, na.rm = TRUE), 4),
-    sd_transcript_pearson = round(sd(pearson_corr, na.rm = TRUE), 4),
-    # Transcript-level Spearman correlation stats
-    mean_transcript_spearman = round(mean(spearman_corr, na.rm = TRUE), 4),
-    median_transcript_spearman = round(median(spearman_corr, na.rm = TRUE), 4),
-    sd_transcript_spearman = round(sd(spearman_corr, na.rm = TRUE), 4),
+    mean_r_transcript = round(mean(r_transcript, na.rm = TRUE), 4),
+    median_r_transcript = round(median(r_transcript, na.rm = TRUE), 4),
+    sd_r_transcript = round(sd(r_transcript, na.rm = TRUE), 4),
     .groups = 'drop'
   )
 
@@ -533,7 +529,7 @@ updated_master_table <- master_table %>%
     -transcript_id_clean
   ) %>%
   # Sort by classification and transcript_id
-  arrange(crispr_screened, desc(transcript_classification), desc(r_transcript))
+  arrange(desc(transcript_classification), desc(crispr_screened), effect_size, guide_effect_fdr)
 
 # Save the updated master table
 write.csv(updated_master_table, "annotated_table/annotated_transcripts_updated.csv", row.names = FALSE)
@@ -643,37 +639,20 @@ ggplot(complete_analysis %>% filter(!is.na(transcript_length)),
   theme_minimal() +
   theme(legend.position = "none")
 
-# Visualization: Transcript-level MITF correlation comparison (pearson)
-ggplot(mitf_comparison %>% filter(!is.na(pearson_corr)), 
-                                       aes(x = screening_status, y = pearson_corr, fill = screening_status)) +
+# Visualization: Transcript-level MITF correlation comparison
+ggplot(mitf_comparison %>% filter(!is.na(r_transcript)), 
+                                       aes(x = screening_status, y = r_transcript, fill = screening_status)) +
   geom_boxplot(alpha = 0.7) +
   geom_jitter(width = 0.2, alpha = 0.3, size = 0.5) +
   geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
   labs(
-    title = "Transcript-level MITF Pearson Correlation: Screened vs Non-Screened",
+    title = "Transcript-level MITF Correlation: Screened vs Non-Screened",
     x = "Screening Status",
     y = "Transcript Pearson Correlation with MITF",
     fill = "Screening Status"
   ) +
   theme_minimal() +
   theme(legend.position = "none")
-
-# Visualization: Gene-level MITF correlation comparison (spearman)
-ggplot(mitf_comparison %>% filter(!is.na(spearman_corr)), 
-       aes(x = screening_status, y = spearman_corr, fill = screening_status)) +
-  geom_boxplot(alpha = 0.7) +
-  geom_jitter(width = 0.2, alpha = 0.3, size = 0.5) +
-  geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
-  labs(
-    title = "Transcript-level MITF Spearman Correlation: Screened vs Non-Screened",
-    x = "Screening Status",
-    y = "Transcript Spearman Correlation with MITF",
-    fill = "Screening Status"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "none")
-
-
 
 # Test GC content difference
 if (nrow(gc_analysis) > 0 && sum(!is.na(complete_analysis$gene_gc_content)) > 0) {
@@ -718,4 +697,3 @@ if (length(length_screened) > 0 && length(length_nonscreened) > 0) {
   cat("Transcript Length t-test p-value:", format(length_ttest$p.value, scientific = TRUE), "\n")
   cat("Transcript Length mean difference:", round(mean(length_screened) - mean(length_nonscreened)), "bp\n")
 }
-

@@ -84,7 +84,7 @@ results <- auto_biomart_query(
 )
 
 # export Biomart data
-#write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
+write.csv(results$structure, paste0("guide_effect/", transcript_list_name, "_exon_locations.csv"), row.names = FALSE)
 
 #######################  Get exon-level dataframe
 exon_locations <- results$structure
